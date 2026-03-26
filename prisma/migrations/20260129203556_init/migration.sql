@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN "expiresAt" DATETIME;
+ALTER TABLE "User" ADD COLUMN "plan" TEXT;
