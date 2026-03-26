@@ -378,7 +378,7 @@ async function enviarQRPago(
           `${etiquetaTipo}\n\n` +
           `📦 *Plan:* ${PLANES_MAP[precio]?.dispositivos} Dispositivo${(PLANES_MAP[precio]?.dispositivos ?? 1) > 1 ? 's' : ''} – ${PLANES_MAP[precio]?.duracion}\n` +
           `💰 *Monto:* Bs. ${monto.toFixed(2)}\n\n` +
-          `⏳ *Tiempo restante:* ${formatarTiempoRestante(restanteMs)}\n\n` +
+          `⏳ *Validez del Qr* ${formatarTiempoRestante(restanteMs)}\n\n` +
           `📲 Escanea el QR y realiza el pago\n\n` +
           `⚠️ *No envíes comprobante*\n` +
           `✅ El sistema reconoce tu pago automáticamente\n\n` +
@@ -421,7 +421,7 @@ async function enviarQRPago(
       `📲 Escanea el QR y realiza el pago\n\n` +
       `⚠️ *No envíes comprobante*\n` +
       `✅ El sistema reconoce tu pago automáticamente\n\n` +
-      `⏳ Válido por *30 minutos*\n` +
+      `⏳ Qr Válido por *30 minutos*\n` +
       `🚀 Tu cuenta se activará de inmediato\n\n` +
       `👉 0️⃣ Volver al menú principal`
   })
@@ -931,7 +931,7 @@ async function handleDemoCreation(sock: WASocket, from: string, phoneNumber: str
     return `✅✅ *¡Tu demo de 3 horas ya está lista!*\n\n┌───────────────\n👤 Usuario: ${iptvData.usuario}\n🔐 Contraseña: ${iptvData.password}\n└───────────────\n\n🚀 Empieza cuando ingreses a la aplicación\n\n📲 *En IPTV Smarters Pro ingresa:*\n🌐 URL: mtv.bo\n\n📥 *Si necesitas instalar:*\n🔢 Downloader:\n • 223062\n • 123.bo/a\n\n📲 *Descarga directa para celular:*\n🔗 https://bit.ly/mastviptv\n\n*🅾 Volver al menú principal*`
   } catch (error) {
     userStates.delete(phoneNumber)
-    throw new Error('No se pudo crear la cuenta IPTV. Intenta nuevamente.')
+    throw new Error('No se pudo crear la cuenta Mastv. Intenta nuevamente.')
   } finally {
     finalizarProcesoCritico(from)
   }
