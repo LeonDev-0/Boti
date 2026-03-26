@@ -956,7 +956,32 @@ async function getInfoAndPrices(sock: WASocket, from: string): Promise<void> {
       await new Promise(r => setTimeout(r, 1000))
     }
   } catch {}
-  await sock.sendMessage(from, { text: `⚽🔥 MASTV – El mejor IPTV de Bolivia 🔥⚽\n\nTodo el fútbol, deportes y entretenimiento sin cortes ni límites:\n✅ Liga Boliviana\n✅ Mundial, Champions y Libertadores\n✅ UFC y Fórmula 1\n✅ Películas, series y TV en vivo\n\n📱 Compatible con celular, Smart TV, TV Box y PC\n\n🚀 Elige una opción:\n👉 2️⃣ Guia de instalacion\n👉 0️⃣ Menu principal` })
+await sock.sendMessage(from, { 
+text: `🔥🎬 MASTV – Todo el entretenimiento en un solo lugar 🎬🔥
+     
+Con *MASTV* tienes TODO en un solo lugar:
+
+🏆 Liga Boliviana en vivo  
+🌎 Mundial, Champions, Libertadores y Sudamericana  
+🏀 NBA en vivo  
+🥊 UFC, WWE y Fórmula 1  
+🎬 Películas, series y TV en vivo 24/7  
+📺 Novelas, Dramabox y contenido exclusivo  
+🇧🇴 Canales nacionales de Bolivia  
+🔞 Contenido adulto (+18) opcional  
+
+📱 Funciona en TODO:
+Celular • Smart TV • TV Box • PC  
+
+⚡ Activa HOY mismo y empieza a ver al instante  
+💸 Planes accesibles y sin complicaciones  
+
+👉 Elige una opción:
+
+  2️⃣ Guía de instalación  
+  0️⃣ Menú principal  
+`
+})
 }
 
 function getSubscriptionMenu(): string {
@@ -967,11 +992,11 @@ async function sendResellerInfo(sock: WASocket, from: string): Promise<void> {
   try {
     const fs = await import('fs')
     if (fs.existsSync('./recursos/img4.png')) {
-      await sock.sendMessage(from, { image: fs.readFileSync('./recursos/img4.png'), caption: '📢 SISTEMA DE REVENTA MASTV' })
+      await sock.sendMessage(from, { image: fs.readFileSync('./recursos/img4.png'), caption: 'PRECIO DE CREDITOS' })
       await new Promise(r => setTimeout(r, 800))
     }
     if (fs.existsSync('./recursos/img5.png')) {
-      await sock.sendMessage(from, { image: fs.readFileSync('./recursos/img5.png'), caption: '💰 PLANES DE CRÉDITOS' })
+      await sock.sendMessage(from, { image: fs.readFileSync('./recursos/img5.png'), caption: '💰PRECIO CLIENTE FINAL ' })
       await new Promise(r => setTimeout(r, 800))
     }
   } catch (e: any) {
@@ -987,7 +1012,7 @@ async function sendResellerInfo(sock: WASocket, from: string): Promise<void> {
       `🔵 Crear cuenta 2 dispositivos / 1 mes → *0.75 créditos*\n` +
       `🟢 Crear cuenta 3 dispositivos / 1 mes → *1 crédito*\n\n` +
       `🎁 *DEMOS*\n` +
-      `Puedes generar demos ilimitados para pruebas (solo para mostrar el servicio).\n\n` +
+     `Puedes generar demos ilimitados para pruebas (solo para mostrar el servicio).\n\n` +
       `💰 *EJEMPLO DE GANANCIA*\n` +
       `Compra de crédito: *18 Bs*\n` +
       `Venta de 1 cuenta: *40 Bs*\n\n` +
@@ -1019,7 +1044,7 @@ function getAdvisorContact(): string {
 }
 
 function getInstallationGuide(): string {
-  return `📲 *INSTALACIÓN DE MASTV*\n\n¿En qué dispositivo deseas instalar MASTV? 👇\n\n*A*) 📱 Android\n*B*) 🍎 iPhone\n*C*) 📺 Smart TV\n*D*) 📦 TV Box / Fire Stick\n*E*) 💻 PC o Laptop\n\n✍️ Responde con la letra de la opción\n\n*🅾* Volver al menú principal`
+  return `📲 *INSTALACIÓN DE MASTV*\n\n¿En qué dispositivo deseas instalar MASTV? 👇\n\n*A*) 📱 Celular-Android\n*B*) 🍎 Iphone\n*C*) 📺 Smart TV\n*D*) 📦 TV Box / Tv Stick\n*E*) 💻 PC o Laptop\n\n✍️ Responde con la letra de la opción\n\n*🅾* Volver al menú principal`
 }
 
 function getMainMenu(existingUser: any): string {
@@ -1028,31 +1053,31 @@ function getMainMenu(existingUser: any): string {
 }
 
 async function sendInstallationGuideAndroid(sock: WASocket, from: string, existingUser: any): Promise<void> {
-  try { const fs = await import('fs'); if (fs.existsSync('./recursos/video1.mp4')) { await sock.sendMessage(from, { video: fs.readFileSync('./recursos/video1.mp4'), caption: '📱 *GUÍA DE INSTALACIÓN - ANDROID*' }); await new Promise(r => setTimeout(r, 1500)) } } catch {}
+  // try { const fs = await import('fs'); if (fs.existsSync('./recursos/video1.mp4')) { await sock.sendMessage(from, { video: fs.readFileSync('./recursos/playstore.mp4'), caption: '📱 *GUÍA DE INSTALACIÓN - ANDROID*' }); await new Promise(r => setTimeout(r, 1500)) } } catch {}
   const u = existingUser; const n = u?.nombre || '{nombre}'; const us = u?.usuario || '{usuario}'; const p = u?.password || '{password}'
   await sock.sendMessage(from, { text: `📱 INSTALACIÓN EN CELULAR ANDROID\n\n👉 PASO 1\nPresiona el link azul para descargar la aplicación:\n🔵 https://123.bo/a\n\n⏳ PASO 2\nEspera a que termine la descarga.\nLuego presiona INSTALAR 👆\n\n📲 PASO 3\nCuando termine la instalación, presiona ABRIR 👆\n\n🔐 PASO 4\nDentro de la app selecciona:\n👉 MOBILE\n\n✍️ PASO 5\nIngresa tus datos:\n\n📋 Nombre: ${n}\n👤 Usuario: ${us}\n🔑 Contraseña: ${p}\n\n🅾️ Volver al Menú` })
 }
 
 async function sendInstallationGuideIPhone(sock: WASocket, from: string, existingUser: any): Promise<void> {
-  try { const fs = await import('fs'); if (fs.existsSync('./recursos/video1.mp4')) { await sock.sendMessage(from, { video: fs.readFileSync('./recursos/video1.mp4'), caption: '🍎 *GUÍA DE INSTALACIÓN - iPHONE*' }); await new Promise(r => setTimeout(r, 1500)) } } catch {}
+  try { const fs = await import('fs'); if (fs.existsSync('./recursos/iphone.mp4')) { await sock.sendMessage(from, { video: fs.readFileSync('./recursos/iphone.mp4'), caption: '🍎 *GUÍA DE INSTALACIÓN - iPHONE*' }); await new Promise(r => setTimeout(r, 1500)) } } catch {}
   const u = existingUser; const us = u?.usuario || '{usuario}'; const p = u?.password || '{password}'
-  await sock.sendMessage(from, { text: `🍎 INSTALACIÓN EN IPHONE / IPAD – MasTV\n\n👉 PASO 1\nAbre App Store en tu iPhone o iPad.\n\n🔎 PASO 2\nBusca: 📺 IPTV Stream Player o 📺 VU IPTV Player\n\n🔵 https://bit.ly/iphone-vu-iptv-player\n🔵 https://bit.ly/iphone-iptv-stream-player\n\n⬇️ PASO 3\nPresiona OBTENER e instala la aplicación.\n\n✍️ PASO 4\nIngresa tus datos:\n\n👤 Usuario: ${us}\n🔑 Contraseña: ${p}\n🌐 URL: vivetv.net\n\n🅾️ Volver al Menu` })
+  await sock.sendMessage(from, { text: `🍎 INSTALACIÓN EN IPHONE / IPAD – MasTV\n\n👉 PASO 1\nAbre App Store en tu iPhone o iPad.\n\n🔎 PASO 2\nBusca: 📺 IPTV Stream Player o 📺 VU IPTV Player\n\n🔵 https://bit.ly/iphone-vu-iptv-player\n🔵 https://bit.ly/iphone-iptv-stream-player\n\n⬇️ PASO 3\nPresiona OBTENER e instala la aplicación.\n\n✍️ PASO 4\nIngresa tus datos:\n\n👤 Usuario: ${us}\n🔑 Contraseña: ${p}\n🌐 URL: http://mtv.bo:80 \n\n🅾️ Volver al Menu` })
 }
 
 async function sendInstallationGuideSmartTV(sock: WASocket, from: string, existingUser: any): Promise<void> {
-  try { const fs = await import('fs'); if (fs.existsSync('./recursos/video1.mp4')) { await sock.sendMessage(from, { video: fs.readFileSync('./recursos/video1.mp4'), caption: '📺 *GUÍA DE INSTALACIÓN - SMART TV*' }); await new Promise(r => setTimeout(r, 1500)) } } catch {}
+  try { const fs = await import('fs'); if (fs.existsSync('./recursos/smart.mp4')) { await sock.sendMessage(from, { video: fs.readFileSync('./recursos/smart.mp4')}); await new Promise(r => setTimeout(r, 1500)) } } catch {}
   const u = existingUser; const n = u?.nombre || '{nombre}'; const us = u?.usuario || '{usuario}'; const p = u?.password || '{password}'
   await sock.sendMessage(from, { text: `📺 INSTALACIÓN EN SMART TV\n\n🛒 PASO 1\nAbre la tienda de tu TV y busca: 📺 IPTV Smarters Pro\n\n✍️ PASO 2\nIngresa tus datos:\n\n🧾 Nombre: ${n}\n👤 Usuario: ${us}\n🔑 Contraseña: ${p}\n🌐 URL: vivetv.net\n\n🅾️ Volver al Menú` })
 }
 
 async function sendInstallationGuideTVBox(sock: WASocket, from: string, existingUser: any): Promise<void> {
-  try { const fs = await import('fs'); if (fs.existsSync('./recursos/video1.mp4')) { await sock.sendMessage(from, { video: fs.readFileSync('./recursos/video1.mp4'), caption: '📦 *GUÍA DE INSTALACIÓN - TV BOX*' }); await new Promise(r => setTimeout(r, 1500)) } } catch {}
+  try { const fs = await import('fs'); if (fs.existsSync('./recursos/playstore.mp4')) { await sock.sendMessage(from, { video: fs.readFileSync('./recursos/playstore.mp4'), caption: '📦 *INSTALACION DESDE PLAY STORE*' }); await new Promise(r => setTimeout(r, 1500)) } } catch {}
   const u = existingUser; const n = u?.nombre || '{nombre}'; const us = u?.usuario || '{usuario}'; const p = u?.password || '{password}'
-  await sock.sendMessage(from, { text: `📺 INSTALACIÓN EN ANDROID TV / TV BOX\n\n🛒 PASO 1\nAbre Google Play Store y busca: Downloader\n\n🔢 PASO 2\nAbre Downloader y escribe el código: 🔹 223062\n\nPresiona GO para descargar e instalar.\n\n✍️ PASO 3\nIngresa tus datos:\n\n🧾 Nombre: ${n}\n👤 Usuario: ${us}\n🔑 Contraseña: ${p}\n\n🅾️ Volver al Menú` })
+  await sock.sendMessage(from, { text: `📺 INSTALACION POR DOWNLOADER\n\n🛒 PASO 1\nAbre Google Play Store y busca: Downloader\n\n🔢 PASO 2\nAbre Downloader y escribe el código: 🔹 223062\n\nPresiona GO para descargar e instalar.\n\n✍️ PASO 3\nIngresa tus datos:\n\n🧾 Nombre: ${n}\n👤 Usuario: ${us}\n🔑 Contraseña: ${p}\n\n🅾️ Volver al Menú` })
 }
 
 async function sendInstallationGuidePC(sock: WASocket, from: string, existingUser: any): Promise<void> {
-  try { const fs = await import('fs'); if (fs.existsSync('./recursos/video1.mp4')) { await sock.sendMessage(from, { video: fs.readFileSync('./recursos/video1.mp4'), caption: '💻 *GUÍA DE INSTALACIÓN - PC*' }); await new Promise(r => setTimeout(r, 1500)) } } catch {}
+  try { const fs = await import('fs'); if (fs.existsSync('./recursos/pc.mp4')) { await sock.sendMessage(from, { video: fs.readFileSync('./recursos/pc.mp4')}); await new Promise(r => setTimeout(r, 1500)) } } catch {}
   const u = existingUser; const n = u?.nombre || '{nombre}'; const us = u?.usuario || '{usuario}'; const p = u?.password || '{password}'
   await sock.sendMessage(from, { text: `💻 INSTALACIÓN EN PC / LAPTOP\n\n👉 PASO 1\nDescarga la aplicación:\n🔵 https://bit.ly/mastvpc\n\n⬇️ PASO 2\nInstala y abre la aplicación.\n\n✍️ PASO 3\nIngresa tus datos:\n\n🧾 Nombre: ${n}\n👤 Usuario: ${us}\n🔑 Contraseña: ${p}\n\n🅾️ Volver al Menú` })
 }
@@ -1074,3 +1099,5 @@ const PLANES_MAP: { [key: string]: { dispositivos: number, duracion: string, pre
   '225': { dispositivos: 3, duracion: '6 Meses',  precio: 225, bonus: '+ 1 Mes 🎁' },
   '440': { dispositivos: 3, duracion: '12 Meses', precio: 440, bonus: '+ 2 Meses 🎁' },
 }
+
+//este arvchivo es messageHandler.ts

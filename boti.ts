@@ -69,3 +69,5 @@ async function startBot(): Promise<void> {
 iniciarPollerPagos()
 
 startBot().catch(console.error)
+
+//este arvchivo es boti.ts
