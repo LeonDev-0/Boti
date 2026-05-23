@@ -41,6 +41,27 @@ async function send(chatId: number, text: string, markup?: object): Promise<any>
   })
 }
 
+function detectarTipoArchivo(buf: Buffer): { mime: string; nombre: string } {
+  if (buf[0] === 0xFF && buf[1] === 0xD8)                                           return { mime: 'image/jpeg',       nombre: 'comprobante.jpg' }
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47)    return { mime: 'image/png',        nombre: 'comprobante.png' }
+  if (buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46)    return { mime: 'application/pdf',  nombre: 'comprobante.pdf' }
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46)                       return { mime: 'image/gif',        nombre: 'comprobante.gif' }
+  return { mime: 'application/octet-stream', nombre: 'comprobante' }
+}
+
+async function sendDocument(chatId: number, docBuffer: Buffer, caption: string, markup?: object): Promise<void> {
+  const { mime, nombre } = detectarTipoArchivo(docBuffer)
+  const form = new FormData()
+  form.append('chat_id', String(chatId))
+  form.append('caption', caption)
+  form.append('parse_mode', 'Markdown')
+  form.append('document', new Blob([docBuffer], { type: mime }), nombre)
+  if (markup) form.append('reply_markup', JSON.stringify(markup))
+  const res = await fetch(`${API_URL}/sendDocument`, { method: 'POST', body: form })
+  const data = await res.json() as any
+  if (!data.ok) throw new Error(`[sendDocument] ${data.description}`)
+}
+
 async function edit(chatId: number, msgId: number, text: string, markup?: object): Promise<void> {
   try {
     await api('editMessageText', {
@@ -48,12 +69,28 @@ async function edit(chatId: number, msgId: number, text: string, markup?: object
       ...(markup ? { reply_markup: markup } : {}),
     })
   } catch (e: any) {
-    if (!e.message?.includes('not modified')) console.error('edit error:', e.message)
+    if (e.message?.includes('there is no text in the message')) {
+      try {
+        await api('editMessageCaption', {
+          chat_id: chatId, message_id: msgId, caption: text, parse_mode: 'Markdown',
+          ...(markup ? { reply_markup: markup } : {}),
+        })
+      } catch (e2: any) {
+        if (!e2.message?.includes('not modified')) console.error('editCaption error:', e2.message)
+      }
+    } else if (!e.message?.includes('not modified')) {
+      console.error('edit error:', e.message)
+    }
   }
 }
 
 async function answerCb(id: string, text?: string): Promise<void> {
   await api('answerCallbackQuery', { callback_query_id: id, ...(text ? { text } : {}) })
+}
+
+async function deleteAndSend(chatId: number, msgId: number, text: string, markup?: object): Promise<void> {
+  try { await api('deleteMessage', { chat_id: chatId, message_id: msgId }) } catch {}
+  await send(chatId, text, markup)
 }
 
 // ── Teclados ───────────────────────────────────────────────
@@ -492,12 +529,12 @@ async function handleCallback(cbId: string, chatId: number, msgId: number, data:
   if (data.startsWith('ap_')) {
     const phoneNumber = data.replace('ap_', '')
     const result = await aprobarPagoManual(phoneNumber)
-    await edit(chatId, msgId, result, BACK_KB); return
+    await deleteAndSend(chatId, msgId, result, BACK_KB); return
   }
   if (data.startsWith('rj_')) {
     const phoneNumber = data.replace('rj_', '')
     const result = await rechazarPagoManual(phoneNumber)
-    await edit(chatId, msgId, result, BACK_KB); return
+    await deleteAndSend(chatId, msgId, result, BACK_KB); return
   }
   if (data.startsWith('del_ok_')) {
     const usuario = data.replace('del_ok_', '')
@@ -707,13 +744,21 @@ export function iniciarTelegramAdmin(): void {
   iniciarSchedulerMensual()
   setTimeout(() => notificarCreditosAlArrancar(), 8000)
 
-  setAdminNotifyCallback(async (text: string, phoneNumber?: string) => {
+  setAdminNotifyCallback(async (text: string, phoneNumber?: string, mediaBuffer?: Buffer) => {
     const markup = phoneNumber
       ? kb([
           [{ text: '✅ Aprobar', cb: `ap_${phoneNumber}` }, { text: '❌ Rechazar', cb: `rj_${phoneNumber}` }],
           [{ text: '⏸️ En espera', cb: `hold_${phoneNumber}` }],
         ])
       : undefined
+    if (mediaBuffer && phoneNumber) {
+      try {
+        await sendDocument(ADMIN_ID, mediaBuffer, text, markup)
+        return
+      } catch {
+        // fallback a texto si falla el envío del documento
+      }
+    }
     await send(ADMIN_ID, text, markup)
   })
 

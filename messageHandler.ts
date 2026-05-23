@@ -1,4 +1,4 @@
-import { WASocket } from '@whiskeysockets/baileys'
+import { WASocket, downloadMediaMessage } from '@whiskeysockets/baileys'
 import { prisma } from './lib/prisma.js'
 import { crearUsuarioIPTV } from './iptvservice.js'
 import https from 'https'
@@ -169,7 +169,7 @@ const TEXTO_PREGUNTA_ADULTOS =
   `0️⃣ Volver al menú`
 
 // ── Callback para notificar al admin de Telegram ───────────
-type AdminNotifyFn = (text: string, phoneNumber?: string) => Promise<void>
+type AdminNotifyFn = (text: string, phoneNumber?: string, mediaBuffer?: Buffer) => Promise<void>
 let adminNotifyCallback: AdminNotifyFn | null = null
 export function setAdminNotifyCallback(fn: AdminNotifyFn): void {
   adminNotifyCallback = fn
@@ -1026,6 +1026,7 @@ export function getPagosManualPendientes() {
   return Array.from(pagosManualPendientes.values())
 }
 
+
 export async function isVeripagosEnabled(): Promise<boolean> {
   try {
     const config = await prisma.config.findUnique({ where: { key: 'veripagos_enabled' } })
@@ -1084,6 +1085,7 @@ async function enviarComprobanteAlAdmin(
   from: string,
   phoneNumber: string,
   pagoManual: PagoManual,
+  msg: any,
 ): Promise<void> {
   userStates.delete(phoneNumber)
   pagoManual.comprobanteRecibido = true  // mantener en map para que admin pueda aprobar/rechazar
@@ -1097,16 +1099,24 @@ async function enviarComprobanteAlAdmin(
       ? `📦 *Plan:* ${planInfo.duracion}${planInfo.bonus ? ' ' + planInfo.bonus : ''}\n📺 *Dispositivos:* ${planInfo.dispositivos}\n💰 *Total:* Bs. ${planInfo.precio}`
       : `💰 *Total:* Bs. ${pagoManual.precio}`
     const usuarioLine = pagoManual.usuarioIPTV ? `🔑 *Usuario IPTV:* ${pagoManual.usuarioIPTV}\n` : ''
+
+    let mediaBuffer: Buffer | undefined
+    try {
+      const hasMedia = msg?.message?.imageMessage || msg?.message?.documentMessage ||
+        msg?.message?.documentWithCaptionMessage?.message?.imageMessage
+      if (hasMedia) mediaBuffer = await downloadMediaMessage(msg, 'buffer', {}) as Buffer
+    } catch { /* sin archivo adjunto */ }
+
     await adminNotifyCallback(
       `💳 *PAGO MANUAL PENDIENTE*\n\n` +
       `👤 *Cliente:* ${pagoManual.nombre}\n` +
       `📱 *Número:* ${phoneNumber}\n` +
       `${usuarioLine}` +
       `${planDescLineas}\n` +
-      `🖼️ *Comprobante:* Recibido\n` +
       `${tipoLabel}\n\n` +
       `¿Aprobar o rechazar?`,
       phoneNumber,
+      mediaBuffer,
     )
   }
 }
@@ -1200,7 +1210,7 @@ async function _handleMessage(sock: WASocket, msg: any): Promise<void> {
 
     if (pagoManual) {
       if (text === undefined) {
-        await enviarComprobanteAlAdmin(sock, from, phoneNumber, pagoManual)
+        await enviarComprobanteAlAdmin(sock, from, phoneNumber, pagoManual, msg)
       } else {
         await sendMsg(sock, from, { text: `📎 *Envía una imagen o PDF* de tu comprobante de pago.\n\n0️⃣ Cancelar` })
       }
@@ -1217,7 +1227,7 @@ async function _handleMessage(sock: WASocket, msg: any): Promise<void> {
     if (minutosTranscurridos > 30) {
       pagosManualPendientes.delete(phoneNumber)
     } else if (text === undefined && !pagoFuera.comprobanteRecibido) {
-      await enviarComprobanteAlAdmin(sock, from, phoneNumber, pagoFuera)
+      await enviarComprobanteAlAdmin(sock, from, phoneNumber, pagoFuera, msg)
       return
     }
   }

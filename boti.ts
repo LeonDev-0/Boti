@@ -11,19 +11,41 @@ import { prisma } from './lib/prisma.js'
 import { handleMessage, iniciarPollerPagos, iniciarPollerExpiraciones, iniciarPollerActivacionesPendientes, setSock } from './messageHandler.js'
 import { iniciarTelegramAdmin, detenerTelegramAdmin } from './telegramAdmin.js'
 
-const _origLog = console.log.bind(console)
-console.log = (...args: any[]) => {
-  const msg = args[0]?.toString() ?? ''
-  if (msg.includes('Decrypted message with closed session') || msg.includes('Closing session:')) return
-  _origLog(...args)
+const NOISE_PATTERNS = [
+  'Decrypted message with closed session',
+  'Closing session:',
+  'Session error',
+  'Bad MAC',
+  'SessionEntry',
+  'pubKey: <Buffer',
+  'privKey: <Buffer',
+  'rootKey: <Buffer',
+  'baseKey: <Buffer',
+  'remoteIdentityKey: <Buffer',
+  'lastRemoteEphemeralKey: <Buffer',
+  'ephemeralKeyPair',
+  'currentRatchet',
+  'indexInfo',
+  'pendingPreKey',
+  '_chains',
+  'chainKey',
+  'previousCounter',
+  'registrationId',
+]
+
+function isNoise(...args: any[]): boolean {
+  const combined = args.map(a => (typeof a === 'string' ? a : JSON.stringify(a) ?? '')).join(' ')
+  return NOISE_PATTERNS.some(p => combined.includes(p))
 }
 
+const _origLog = console.log.bind(console)
+console.log = (...args: any[]) => { if (!isNoise(...args)) _origLog(...args) }
+
 const _origError = console.error.bind(console)
-console.error = (...args: any[]) => {
-  const msg = args[0]?.toString() ?? ''
-  if (msg.includes('Bad MAC') || msg.includes('Session error')) return
-  _origError(...args)
-}
+console.error = (...args: any[]) => { if (!isNoise(...args)) _origError(...args) }
+
+const _origWarn = console.warn.bind(console)
+console.warn = (...args: any[]) => { if (!isNoise(...args)) _origWarn(...args) }
 
 async function startBot(): Promise<void> {
   const { state, saveCreds } = await useMultiFileAuthState('auth')
