@@ -8,7 +8,22 @@ import makeWASocket, {
 import QRCode from 'qrcode-terminal'
 import pino from 'pino'
 import { prisma } from './lib/prisma.js'
-import { handleMessage, iniciarPollerPagos, setSock } from './messageHandler.js'
+import { handleMessage, iniciarPollerPagos, iniciarPollerExpiraciones, iniciarPollerActivacionesPendientes, setSock } from './messageHandler.js'
+import { iniciarTelegramAdmin, detenerTelegramAdmin } from './telegramAdmin.js'
+
+const _origLog = console.log.bind(console)
+console.log = (...args: any[]) => {
+  const msg = args[0]?.toString() ?? ''
+  if (msg.includes('Decrypted message with closed session') || msg.includes('Closing session:')) return
+  _origLog(...args)
+}
+
+const _origError = console.error.bind(console)
+console.error = (...args: any[]) => {
+  const msg = args[0]?.toString() ?? ''
+  if (msg.includes('Bad MAC') || msg.includes('Session error')) return
+  _origError(...args)
+}
 
 async function startBot(): Promise<void> {
   const { state, saveCreds } = await useMultiFileAuthState('auth')
@@ -57,16 +72,21 @@ async function startBot(): Promise<void> {
     await handleMessage(sock, msg)
   })
 
-  // Cerrar Prisma al terminar
+
+  // Cerrar todo al terminar
   process.on('SIGINT', async () => {
     console.log('👋 Cerrando bot...')
+    detenerTelegramAdmin()
     await prisma.$disconnect()
     process.exit(0)
   })
 }
 
-// ← iniciar el poller UNA sola vez antes de conectar
+// ← iniciar los pollers y el admin de Telegram UNA sola vez
 iniciarPollerPagos()
+iniciarPollerExpiraciones().catch(console.error)
+iniciarPollerActivacionesPendientes().catch(console.error)
+iniciarTelegramAdmin()
 
 startBot().catch(console.error)
 
