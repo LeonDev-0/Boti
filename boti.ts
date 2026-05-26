@@ -5,11 +5,14 @@ import makeWASocket, {
   WASocket,
   ConnectionState,
 } from '@whiskeysockets/baileys'
+// @ts-ignore
 import QRCode from 'qrcode-terminal'
+import qrcode from 'qrcode'
 import pino from 'pino'
+import fs from 'fs'
 import { prisma } from './lib/prisma.js'
 import { handleMessage, iniciarPollerPagos, iniciarPollerExpiraciones, iniciarPollerActivacionesPendientes, setSock } from './messageHandler.js'
-import { iniciarTelegramAdmin, detenerTelegramAdmin } from './telegramAdmin.js'
+import { iniciarTelegramAdmin, detenerTelegramAdmin, setResetSessionCallback, notifyQrCode, notifyBotConectado } from './telegramAdmin.js'
 
 const NOISE_PATTERNS = [
   'Decrypted message with closed session',
@@ -47,6 +50,24 @@ console.error = (...args: any[]) => { if (!isNoise(...args)) _origError(...args)
 const _origWarn = console.warn.bind(console)
 console.warn = (...args: any[]) => { if (!isNoise(...args)) _origWarn(...args) }
 
+let currentSock: WASocket | null = null
+
+async function resetSession(): Promise<void> {
+  console.log('🔄 Reiniciando sesión de WhatsApp...')
+  try {
+    if (currentSock) {
+      currentSock.ev.removeAllListeners()
+      ;(currentSock.ws as any).close()
+      currentSock = null
+    }
+  } catch {}
+  if (fs.existsSync('./auth')) {
+    fs.rmSync('./auth', { recursive: true, force: true })
+    console.log('🗑️ Carpeta auth eliminada')
+  }
+  setTimeout(() => startBot(), 1000)
+}
+
 async function startBot(): Promise<void> {
   const { state, saveCreds } = await useMultiFileAuthState('auth')
   const { version } = await fetchLatestBaileysVersion()
@@ -59,6 +80,7 @@ async function startBot(): Promise<void> {
     connectTimeoutMs: 60000,
   })
 
+  currentSock = sock
   sock.ev.on('creds.update', saveCreds)
 
   sock.ev.on('connection.update', async (update: Partial<ConnectionState>) => {
@@ -67,6 +89,12 @@ async function startBot(): Promise<void> {
     if (qr) {
       console.log('📲 Escanea el QR')
       QRCode.generate(qr, { small: true })
+      try {
+        const buffer = await qrcode.toBuffer(qr, { type: 'png', scale: 6 })
+        await notifyQrCode(buffer)
+      } catch (e: any) {
+        console.error('⚠️ No se pudo enviar QR a Telegram:', e.message)
+      }
     }
 
     if (connection === 'close') {
@@ -84,7 +112,9 @@ async function startBot(): Promise<void> {
 
     if (connection === 'open') {
       console.log('🤖 Bot MasTV conectado correctamente')
-      setSock(sock) // ← actualizar referencia del socket en cada reconexión
+      setSock(sock)
+      const numero = sock.user?.id?.split(':')[0]?.split('@')[0] ?? 'desconocido'
+      await notifyBotConectado(numero)
     }
   })
 
@@ -93,7 +123,6 @@ async function startBot(): Promise<void> {
     const msg = messages[0]
     await handleMessage(sock, msg)
   })
-
 
   // Cerrar todo al terminar
   process.on('SIGINT', async () => {
@@ -109,6 +138,7 @@ iniciarPollerPagos()
 iniciarPollerExpiraciones().catch(console.error)
 iniciarPollerActivacionesPendientes().catch(console.error)
 iniciarTelegramAdmin()
+setResetSessionCallback(resetSession)
 
 startBot().catch(console.error)
 

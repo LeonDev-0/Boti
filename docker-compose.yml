@@ -1,0 +1,11 @@
+services:
+  boti:
+    image: zandrotja/boti:latest
+    restart: unless-stopped
+    volumes:
+      - ./auth:/app/auth
+      - ./panel-profile:/app/panel-profile
+      - ./dev.db:/app/dev.db
+    environment:
+      - DATABASE_URL=file:./dev.db
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium

@@ -1,0 +1,1414 @@
+================================================================================
+MENSAJES DEL BOT MASTV — DOCUMENTO DE REFERENCIA PARA REFACTORIZACIÓN
+================================================================================
+Formato: [ID] NOMBRE DEL MENSAJE
+         Cuándo/dónde se usa
+         ---
+         Texto exacto del mensaje
+         (las variables dinámicas van entre {llaves})
+================================================================================
+
+
+================================================================================
+SECCIÓN 1 — MENÚ PRINCIPAL
+================================================================================
+
+[M01] MENÚ PRINCIPAL — Cliente sin cuenta
+Cuándo: Cuando un cliente nuevo escribe por primera vez, escribe "menu", "0",
+        o cualquier texto que no coincide con ninguna opción.
+---
+👋 Bienvenido a *MasTV*
+
+📋 *MENÚ MASTV*
+
+1️⃣ Ver planes y precios
+2️⃣ Guía de instalación
+3️⃣ 🎁 Prueba GRATIS por 3 horas
+4️⃣ 🚀 Activar mi cuenta ahora
+6️⃣ 💼 Quiero vender MasTV
+7️⃣ 🛠 Hablar con soporte
+
+👉 Responde con un número
+
+
+[M02] MENÚ PRINCIPAL — Cliente con cuenta oficial
+Cuándo: Cuando un cliente que ya tiene cuenta activa escribe "menu", "0",
+        o cualquier texto no reconocido.
+---
+👋 Bienvenido de nuevo *{nombre}*
+
+📋 *MENÚ MASTV*
+
+1️⃣ Información y precios
+2️⃣ Guía de instalación
+3️⃣ 📺 Mi cuenta MasTV
+6️⃣ 🌐 Comunidad
+7️⃣ 🛠 Soporte técnico
+
+👉 Responde con un número
+
+
+================================================================================
+SECCIÓN 2 — INFORMACIÓN Y PRECIOS (opción 1)
+================================================================================
+
+[M03] INFORMACIÓN Y PRECIOS
+Cuándo: Cliente escribe "1" en el menú principal.
+        Se envía primero una imagen (./recursos/img.png) con el caption
+        "💵 PLANES Y PRECIOS 👆", luego este texto.
+---
+🔥🎬 MASTV – Todo el entretenimiento en un solo lugar 🎬🔥
+
+Con *MASTV* tienes TODO en un solo lugar:
+
+🏆 Liga Boliviana en vivo
+🌎 Mundial, Champions, Libertadores y Sudamericana
+🏀 NBA en vivo
+🥊 UFC, WWE y Fórmula 1
+🎬 Películas, series y TV en vivo 24/7
+📺 Novelas, Dramabox y contenido exclusivo
+🇧🇴 Canales nacionales de Bolivia
+🔞 Contenido adulto (+18) opcional
+
+📱 Funciona en TODO:
+Celular • Smart TV • TV Box • PC
+
+⚡ Activa HOY mismo y empieza a ver al instante
+💸 Planes accesibles y sin complicaciones
+
+👉 Elige una opción:
+
+  2️⃣ Ver guía de instalación
+  3️⃣ 🎁 Solicitar prueba GRATIS
+  4️⃣ 🚀 Activar mi cuenta
+  0️⃣ Volver al menú principal
+
+
+================================================================================
+SECCIÓN 3 — GUÍA DE INSTALACIÓN (opción 2)
+================================================================================
+
+[M04] MENÚ GUÍA DE INSTALACIÓN
+Cuándo: Cliente escribe "2" en el menú principal.
+---
+📲 *GUÍA DE INSTALACIÓN MASTV*
+
+Instala MasTV fácilmente en tu dispositivo 👇
+
+🅰️ 📦 TV-Android / TV Box 
+🅱️ 📺 Smart TV (Samsung / LG)
+🅲️ 📱 Celular Android / Tablet
+🅳️ 🍎 iPhone / iPad
+🅴️ 💻 PC o Laptop
+
+✍️ Escribe la letra de tu dispositivo
+
+0️⃣ Volver al menú principal
+
+
+
+[M05] GUÍA ANDROID
+Cuándo: Cliente escribe "c" dentro del menú de instalación.
+---
+📱 *INSTALACIÓN EN CELULAR ANDROID / TABLET*
+
+Tienes varias formas de descargar la aplicación 👇
+
+🔹 *Play Store*
+👉 https://play.google.com/store/apps/details?id=com.tv222aaa.aaa_mobile
+
+🔹 *Play Store (Alternativa)*
+👉 https://play.google.com/store/apps/details?id=com.apksrebrand.smarters.mastv
+
+🔹 *Descarga directa APK*
+👉 https://bit.ly/mastviptv
+
+━━━━━━━━━━━━━━━━━━
+
+📲 *Luego de instalar:*
+
+✅ Abre la aplicación
+✅ Selecciona: *MOBILE*
+✅ Ingresa tus datos:
+
+👤 Usuario: {usuario}
+🔑 Contraseña: {contraseña}
+
+0️⃣ Volver al menú
+
+
+[M06] GUÍA iPHONE
+Cuándo: Cliente escribe "D" dentro del menú de instalación.
+        Se envía primero un video (./recursos/iphone.mp4) si existe.
+---
+
+🍎 *INSTALACIÓN EN iPHONE / iPAD*
+
+Descarga una de estas aplicaciones 👇
+🔹 *IPTV Stream Player*
+👉 https://bit.ly/iphone-iptv-stream-player
+
+🔹 *VU IPTV Player*
+👉 https://bit.ly/iphone-vu-iptv-player
+
+━━━━━━━━━━━━━━━━━━
+
+📲 *Luego de instalar:*
+
+✅ Abre la aplicación
+✅ Ingresa tus datos:
+
+👤 Usuario: {usuario}
+🔑 Contraseña: {contraseña}
+🌐 URL: http://mtv.bo:80
+
+0️⃣ Volver al Menu
+
+
+[M07] GUÍA SMART TV
+Cuándo: Cliente escribe "B" dentro del menú de instalación.
+        Se envía primero un video (./recursos/smart.mp4) si existe.
+---
+📺 *INSTALACIÓN EN SMART TV (Samsung / LG)*
+
+📲 Abre la tienda de aplicaciones de tu TV y descarga:
+
+🔹 *IPTV Smarters Pro*
+
+━━━━━━━━━━━━━━━━━━
+
+✅ Luego abre la aplicación
+✅ Ingresa tus datos:
+
+🧾 Nombre: {nombre}
+👤 Usuario: {usuario}
+🔑 Contraseña: {contraseña}
+🌐 URL: vivetv.net
+
+0️⃣ Volver al Menu
+
+
+[M08] GUÍA TV Android / tv box
+Cuándo: Cliente escribe "A" dentro del menú de instalación.
+        Se envía primero un video (./recursos/playstore.mp4) si existe.
+---
+📦 *INSTALACIÓN EN TV-ANDROID / TV BOX*
+
+Tienes varias formas de instalar la aplicación 👇
+
+🔹 *Play Store*
+🔍 Busca: *Mastv Player* 📺
+
+🔹 *Downloader*
+Código: *223062*
+Código alternativo: *123.bo/a*
+
+🔹 *Descarga por navegador*
+👉 https://bit.ly/mastviptv
+
+━━━━━━━━━━━━━━━━━━
+
+📲 *Luego de instalar:*
+
+✅ Abre la aplicación
+✅ Selecciona: *TV*
+
+👤 Usuario: {usuario}
+🔑 Contraseña: {contraseña}
+
+0️⃣ Volver al Menu
+
+
+
+[M09] GUÍA PC / LAPTOP
+Cuándo: Cliente escribe "E" dentro del menú de instalación.
+        Se envía primero un video (./recursos/pc.mp4) si existe.
+---
+💻 *INSTALACIÓN EN PC / LAPTOP*
+
+Descarga la aplicación 👇
+
+🔹 *FULLTVMAS*
+👉 https://bit.ly/mastvpc
+
+━━━━━━━━━━━━━━━━━━
+
+📲 *Luego de instalar:*
+
+✅ Abre la aplicación
+✅ Ingresa tus datos:
+
+🧾 Nombre: {nombre}
+👤 Usuario: {usuario}
+🔑 Contraseña: {contraseña}
+
+0️⃣ Volver al menú
+
+
+
+[M10] GUÍA INSTALACIÓN — Opción no válida
+Cuándo: Cliente escribe algo distinto a A/B/C/D/E/0 dentro del menú de instalación.
+---
+⚠️ *Opción no válida*
+
+Selecciona una de las siguientes opciones 👇
+
+🅰️ TV-Android / TV Box
+🅱️ Smart TV (Samsung / LG)
+🅲️ Celular Android / Tablet
+🅳️ iPhone / iPad
+🅴️ PC o Laptop
+
+0️⃣ Volver al menú principal
+
+
+================================================================================
+SECCIÓN 4 — PRUEBA GRATIS / DEMO (opción 3 para clientes sin cuenta)
+================================================================================
+
+[M11] SOLICITAR NOMBRE PARA DEMO
+Cuándo: Cliente sin cuenta ni demo previa escribe "3" en el menú.
+---
+🎁 *PRUEBA GRATIS — 3 HORAS*
+
+Vamos a crear tu acceso gratuito 👇
+
+✍️ Escribe tu nombre
+
+📝 Ejemplo: Juan
+
+0️⃣ Volver al menú
+
+
+
+[M12] DEMO YA EXISTENTE — Mostrar cuenta y ofrecer activar
+Cuándo: Cliente escribe "3" pero ya tiene una demo registrada en la base de datos.
+---
+🎁 *TU ACCESO DE PRUEBA*
+
+┌───────────────
+👤 Usuario: {usuario}
+🔑 Contraseña: {contraseña}
+└───────────────
+
+⏱️ La prueba gratuita dura *3 horas*
+⚠️ Disponible solo una vez por usuario
+
+━━━━━━━━━━━━━━━━━━
+
+1️⃣ Activar esta cuenta
+4️⃣ Crear cuenta nueva
+0️⃣ Volver al menú
+
+
+
+[M13] DEMOS DESHABILITADAS
+Cuándo: Cliente escribe "3" pero el admin deshabilitó las demos.
+---
+🔴 *PRUEBAS GRATIS NO DISPONIBLES*
+
+Debido a la alta demanda durante eventos deportivos en vivo, las pruebas gratuitas están temporalmente deshabilitadas.
+
+📺 Por el momento el servicio está disponible solo por suscripción.
+
+━━━━━━━━━━━━━━━━━━
+
+4️⃣ Ver planes y suscribirme
+0️⃣ Volver al menú
+
+
+
+[M15] DEMO CREADA EXITOSAMENTE
+Cuándo: La demo fue creada correctamente en el panel IPTV.
+---
+✅✅ *¡TU PRUEBA GRATIS ESTÁ LISTA!*
+
+┌───────────────
+👤 Usuario: {usuario}
+🔐 Contraseña: {contraseña}
+└───────────────
+
+⏱️ La prueba gratuita tiene una duración de 3 horas y comienza cuando ingreses a la aplicación.
+
+📲 Si necesitas ayuda para instalar:
+
+2️⃣ Guía de instalación
+0️⃣ Volver al menú
+
+
+[M16] ERROR CREANDO DEMO
+Cuándo: Falló la creación de la demo en el panel IPTV.
+---
+
+⚠️ *NO SE PUDO CREAR LA PRUEBA GRATIS*
+
+Ocurrió un problema temporal al generar tu acceso.
+
+⏳ Por favor intenta más tarde.
+
+📞 Si el problema continúa, contacta soporte:
+64598912
+
+0️⃣ Volver al menú
+
+
+
+[M17] CREANDO DEMO — Mensaje de espera
+Cuándo: Justo antes de intentar crear la demo (proceso puede tardar ~10-30 seg).
+---
+⏳ *CREANDO TU PRUEBA GRATIS...*
+
+Por favor espera un momento.
+
+
+
+[M18] VERIFICANDO CUENTA DEMO — Mensaje de espera
+Cuándo: Cliente dentro de "demo_activate_offer" presiona "1" para activar.
+        Se verifica en el panel antes de proceder.
+---
+🔍 *VERIFICANDO TU CUENTA...*
+
+Por favor espera un momento.
+
+
+[M19] DEMO — Cuenta verificada, seleccionar plan para activar
+Cuándo: La cuenta demo fue encontrada en el panel y se ofrece elegir plan de pago.
+---
+✅ *Cuenta Mastv Verificada*
+
+┌───────────────
+👤 Usuario: *{usuario}*
+🔐 Contraseña: *{contraseña}*
+└───────────────
+
+📦 *Elige el plan para activar tu cuenta:*
+👉 Ejemplo: Si quieres 1 Mes por 29 Bs → escribe *29*
+
+📺 *1 DISPOSITIVO*
+▫️ 29 → 1 Mes
+▫️ 82 → 3 Meses
+▫️ 155 → 6 Meses + 1 Mes 🎁
+▫️ 300 → 12 Meses + 2 Meses 🎁
+
+📺 *2 DISPOSITIVOS*
+▫️ 35 → 1 Mes
+▫️ 100 → 3 Meses
+▫️ 190 → 6 Meses + 1 Mes 🎁
+▫️ 380 → 12 Meses + 2 Meses 🎁
+
+📺 *3 DISPOSITIVOS*
+▫️ 40 → 1 Mes
+▫️ 115 → 3 Meses
+▫️ 225 → 6 Meses + 1 Mes 🎁
+▫️ 440 → 12 Meses + 2 Meses 🎁
+
+━━━━━━━━━━━━━━━━━━
+0️⃣ Volver al Menu
+
+
+[M20] DEMO — Opción no válida en flujo de activación
+Cuándo: Cliente en "demo_activate_offer" escribe algo distinto a 1/4/0.
+---
+⚠️ Opción no válida.
+
+1️⃣ Activar esta cuenta
+4️⃣ Suscribirme con cuenta nueva
+0️⃣ Menú
+
+
+================================================================================
+SECCIÓN 5 — SUSCRIPCIÓN / PLANES (opción 4)
+================================================================================
+
+[M21] MENÚ DE PLANES
+Cuándo: Cliente escribe "4" en el menú principal, o confirma que quiere
+        cuenta nueva teniendo ya cuentas registradas.
+---
+💵 *Planes MASTV*
+
+👉 Elija su plan escribiendo el número que aparece a la izquierda.
+Ejemplo: Si quiere 1 Mes por 29 Bs → escriba *29*
+
+📺 *1 DISPOSITIVO*
+▫️ 29 → 1 Mes
+▫️ 82 → 3 Meses
+▫️ 155 → 6 Meses + 1 Mes 🎁
+▫️ 300 → 12 Meses + 2 Meses 🎁
+
+📺 *2 DISPOSITIVOS*
+▫️ 35 → 1 Mes
+▫️ 100 → 3 Meses
+▫️ 190 → 6 Meses + 1 Mes 🎁
+▫️ 380 → 12 Meses + 2 Meses 🎁
+
+📺 *3 DISPOSITIVOS*
+▫️ 40 → 1 Mes
+▫️ 115 → 3 Meses
+▫️ 225 → 6 Meses + 1 Mes 🎁
+▫️ 440 → 12 Meses + 2 Meses 🎁
+
+━━━━━━━━━━━━━━━━━━
+0️⃣ menú principal
+
+
+[M22] REGISTRO DE CLIENTE NUEVO — Solicitar nombre
+Cuándo: Cliente sin historial escribe el precio de un plan (ej: "29").
+        Se le pide el nombre para el registro.
+---
+📝 *CREAR NUEVA CUENTA*
+
+Para continuar, escribe tu nombre 👇
+
+📝 Ejemplo: Juan
+
+0️⃣ Volver al menú
+
+
+
+[M23] YA TIENES CUENTA — Confirmar cuenta nueva (cliente con 1 cuenta)
+Cuándo: Cliente que ya tiene cuenta escribe el precio de un plan.
+        Se le avisa que ya tiene cuenta y se le pregunta si quiere agregar otra.
+        {lista} = "• *usuario* (plan)"
+---
+📺 YA TIENES UNA CUENTA REGISTRADA
+
+{lista}
+
+¿Quieres agregar una cuenta *NUEVA*?
+
+✅ Escribe *SI* para confirmar
+5️⃣ Renovar una cuenta existente
+0️⃣ Menú
+
+
+[M24] YA TIENES CUENTAS — Confirmar cuenta nueva (cliente con 2+ cuentas)
+Cuándo: Igual que M23 pero con múltiples cuentas.
+---
+⚠️ *YA TIENES {N} CUENTAS REGISTRADAS*
+
+{lista}
+
+¿Quieres agregar una cuenta *NUEVA*?
+
+✅ Escribe *SI* para confirmar
+5️⃣ Renovar una cuenta existente
+0️⃣ Volver al Menu Principal
+
+
+[M25] REGISTRO — Opción no válida en confirmación cuenta nueva
+Cuándo: Cliente en estado "confirming_new_account" escribe algo distinto a SI/5/0.
+---
+⚠️ Opción no válida.
+
+✅ Escribe *SI* para agregar cuenta nueva
+5️⃣ Renovar una cuenta existente
+0️⃣ Menú
+
+
+================================================================================
+SECCIÓN 6 — PREGUNTA CANALES ADULTOS
+================================================================================
+
+[M26] PREGUNTA CANALES ADULTOS (+18)
+Cuándo: Después de capturar el nombre (para demo o cuenta nueva), antes de
+        generar el QR. Se pregunta si desea incluir canales adultos.
+---
+🔞 *¿Deseas incluir canales para adultos (+18)?*
+
+1️⃣ Sí, incluir contenido adulto
+2️⃣ No, sin contenido adulto
+
+0️⃣ Volver al menú
+
+
+[M27] PREGUNTA ADULTOS — Opción no válida
+Cuándo: Cliente responde algo distinto a 1/2/si/sí/no/0 en la pregunta de adultos.
+---
+⚠️ Opción no válida.
+
+🔞 *¿Deseas incluir canales para adultos (+18)?*
+
+1️⃣ Sí, incluir contenido adulto
+2️⃣ No, sin contenido adulto
+
+0️⃣ Volver al menú
+
+
+================================================================================
+SECCIÓN 7 — PAGO QR (VeriPagos activo)
+================================================================================
+
+[M28] GENERANDO QR — Mensaje de espera
+Cuándo: Antes de llamar a VeriPagos para generar el QR (puede tardar 3-8 seg).
+---
+⏳ *GENERANDO QR DE PAGO*
+
+💳 Monto: *Bs. {monto}*
+
+Por favor espera un momento...
+
+
+
+[M29] CAMBIO DE PLAN DETECTADO
+Cuándo: Cliente ya tiene QR activo pero elige un plan diferente.
+        Se cancela el QR anterior y se genera uno nuevo.
+---
+🔄 *CAMBIO DE PLAN DETECTADO*
+
+Generando un nuevo QR de pago por:
+
+💳 *Bs. {monto}*
+
+Por favor espera un momento...
+
+
+
+[M30] QR GENERADO — Imagen con caption (VeriPagos ON)
+Cuándo: QR generado correctamente. Se envía como imagen.
+        Aplica tanto para cuenta nueva como renovación.
+        {tipo} = "🆕 *Cuenta nueva*" ó "🔄 *Renovación de cuenta*"
+---
+💳 *INFORMACIÓN DE PAGO*
+
+{tipo}
+
+📦 Plan: {dispositivos} dispositivo(s) — {duracion}
+💰 Monto: *Bs. {monto}*
+
+━━━━━━━━━━━━━━━━━━
+
+📲 Escanea el QR y realiza el pago.
+
+✅ El sistema confirmará automáticamente tu pago.
+
+⏳ QR válido por 30 minutos
+
+0️⃣ Volver al menú
+
+
+
+[M31] QR ACTIVO REUTILIZADO — Imagen con caption
+Cuándo: Cliente pide QR del mismo plan cuando ya tiene uno activo y vigente.
+        Se reenvía el mismo QR sin generar uno nuevo.
+        {tipo} = "🆕 *Cuenta nueva*" ó "🔄 *Renovación de cuenta*"
+---
+
+💳 *QR DE PAGO ACTIVO*
+
+{tipo}
+
+📦 Plan: {dispositivos} dispositivo(s) — {duracion}
+💰 Monto: *Bs. {monto}*
+
+━━━━━━━━━━━━━━━━━━
+
+📲 Escanea el QR y realiza el pago.
+
+⏳ Tiempo restante: *{tiempo_restante}*
+
+✅ El sistema confirmará automáticamente tu pago.
+
+0️⃣ Volver al menú
+
+
+[M32] ERROR GENERANDO QR
+Cuándo: VeriPagos no pudo generar el QR (error de API o timeout).
+---
+⚠️ *NO SE PUDO GENERAR EL QR DE PAGO*
+
+Ocurrió un problema temporal al generar el QR.
+
+⏳ Por favor intenta nuevamente más tarde.
+
+📞 Si el problema continúa, contacta soporte:
+64598912
+
+0️⃣ Volver al menú
+
+
+
+[M33] QR EXPIRADO — Sin pago en 30 minutos
+Cuándo: Poller detecta que pasaron 30 minutos sin pago (120 intentos × 15 seg).
+---
+⏰ *EL QR DE PAGO EXPIRÓ*
+
+El tiempo de pago finalizó y el QR ya no está disponible.
+
+💳 Para generar un nuevo QR, vuelve a escribir el precio de tu plan.
+
+0️⃣ Volver al menú
+
+
+[M34] PAGO QR RECIBIDO — Mensaje de espera
+Cuándo: Poller detecta que el QR fue pagado. Se avisa al cliente antes de procesar.
+        {accion} = "renovando tu cuenta" ó "creando tu cuenta"
+---
+✅ *PAGO RECIBIDO*
+
+Tu pago fue confirmado correctamente.
+
+⏳ Estamos procesando tu cuenta, por favor espera un momento...
+
+
+================================================================================
+SECCIÓN 8 — PAGO MANUAL (VeriPagos desactivado)
+================================================================================
+
+[M35] PAGO MANUAL — Imagen QR con caption
+Cuándo: VeriPagos está desactivado. Se envía la imagen ./recursos/qr.jpg
+        con este caption. Aplica para cuenta nueva y renovación.
+        {tipo} = "🆕 *Cuenta nueva*" ó "🔄 *Renovación de cuenta*"
+---
+💳 *INFORMACIÓN DE PAGO*
+
+{tipo}
+
+📦 Plan: {duracion} — {dispositivos} dispositivo(s)
+💰 Monto a pagar: *Bs. {monto}*
+
+━━━━━━━━━━━━━━━━━━
+
+📲 Realiza el pago utilizando el QR mostrado arriba.
+
+✅ Luego envía:
+• Tu comprobante de pago
+o
+• El nombre del titular de la transferencia
+
+0️⃣ Volver al menú
+
+
+[M36] PAGO MANUAL — Solo texto (si la imagen no existe)
+Cuándo: VeriPagos desactivado pero el archivo ./recursos/qr.jpg no existe.
+---
+💳 *INFORMACIÓN DE PAGO*
+
+{tipo}
+
+📦 Plan: {duracion} — {dispositivos} dispositivo(s)
+💰 Monto a pagar: *Bs. {monto}*
+
+━━━━━━━━━━━━━━━━━━
+
+✅ Envía:
+• Tu comprobante de pago
+o
+• El nombre del titular de la transferencia
+
+0️⃣ Volver al menú
+
+l
+
+
+[M37] CONFIRMACIÓN NOMBRE TITULAR — Pedir confirmación al cliente
+Cuándo: Cliente en estado "esperando_comprobante" escribe texto (no imagen).
+        El bot muestra lo que escribió y pide confirmar si es el nombre correcto.
+---
+✍️ ¿Confirmas que el nombre del titular de la transferencia es:
+
+*{nombre_escrito}*
+
+1️⃣ Sí, es correcto
+✏️ Si está mal, escribe el nombre correcto
+
+0️⃣ Cancelar
+
+
+[M38] VERIFICACIÓN EN PROCESO — Comprobante recibido
+Cuándo: Cliente envía imagen (comprobante) o confirma el nombre del titular.
+        El bot avisa que está verificando mientras notifica al admin.
+---🔍 VERIFICANDO PAGO
+
+Tu comprobante fue recibido correctamente.
+
+⏳ La verificación puede tardar algunos minutos.
+
+Por favor espera....
+
+
+[M39] PAGO APROBADO POR ADMIN — Aviso al cliente
+Cuándo: Admin aprueba el pago manual desde Telegram. Se notifica al cliente.
+---✅ *PAGO CONFIRMADO*
+
+Tu pago fue verificado correctamente.
+
+⏳ Estamos preparando tu cuenta, por favor espera un momento...
+
+
+
+[M40] PAGO RECHAZADO POR ADMIN — Aviso al cliente
+Cuándo: Admin rechaza el pago manual desde Telegram. Se notifica al cliente.
+---⚠️ *NO SE PUDO CONFIRMAR EL PAGO*
+
+No logramos verificar el pago enviado.
+
+📞 Por favor contacta soporte para ayudarte con la verificación:
+64598912
+
+0️⃣ Volver al menú
+
+=================================================================================
+SECCIÓN 9 — CUENTA CREADA / RENOVADA
+================================================================================
+
+[M41] CUENTA NUEVA CREADA EXITOSAMENTE
+Cuándo: Se creó la cuenta en el panel IPTV y se guardó en la base de datos.
+        La fecha mostrada es provisional (el poller la actualizará al activarse).
+---
+✅ *¡CUENTA ACTIVADA!*
+
+┌───────────────
+👤 Usuario: {usuario}
+🔐 Contraseña: {contraseña}
+└───────────────
+
+📦 Plan: {plan}
+📅 Expira: {fecha}
+
+━━━━━━━━━━━━━━━━━━
+
+📲 Si necesitas ayuda para instalar:
+2️⃣ Guía de instalación
+
+0️⃣ Volver al Menú
+
+
+[M42] ERROR CREANDO CUENTA NUEVA
+Cuándo: Falló la creación en el panel IPTV después de recibir el pago.
+---
+⚠️ *NO SE PUDO ACTIVAR LA CUENTA*
+
+Tu pago fue recibido correctamente, pero ocurrió un problema temporal al crear la cuenta.
+
+📞 Por favor contacta soporte:
+64598912
+
+0️⃣ Volver al Menú
+
+
+
+[M43] RENOVACIÓN EXITOSA
+Cuándo: Se renovó la cuenta en el panel IPTV correctamente.
+---
+✅ *¡CUENTA RENOVADA!*
+
+┌───────────────
+👤 Usuario: {usuario}
+🔐 Contraseña: {contraseña}
+└───────────────
+
+📦 Plan: {plan}
+📅 Expira: {fecha}
+
+0️⃣ Volver al Menú
+
+
+
+[M44] ERROR RENOVANDO CUENTA
+Cuándo: Falló la renovación en el panel IPTV después de recibir el pago.
+---
+⚠️ *NO SE PUDO RENOVAR LA CUENTA*
+
+Tu pago fue recibido correctamente, pero ocurrió un problema temporal al renovar la cuenta.
+
+📞 Por favor contacta soporte:
+64598912
+
+0️⃣ Volver al Menú
+
+
+
+================================================================================
+SECCIÓN 10 — MI CUENTA (opción 3 para clientes con cuenta)
+================================================================================
+
+[M45] MIS CUENTAS — 1 cuenta
+Cuándo: Cliente con cuenta oficial escribe "3". Muestra sus datos.
+        {estado_expira} puede ser:
+          📅 Expira: {fecha}                 → activa, normal
+          🟡 Expira en *{N} días* – {fecha}  → vence en 1-5 días
+          ⚠️ *Expiró:* {fecha}               → vencida
+          📅 Sin fecha de expiración          → sin fecha
+          ⏳ *Inicia al conectar por primera vez* → nunca usada
+        {label_adultos} = "8️⃣ Desactivar canales adultos (+18)" ó
+                          "8️⃣ Activar canales adultos (+18)"
+---
+📺 *MIS CUENTAS MASTV*
+
+🟢 *Cuenta*
+┌───────────────
+👤 Usuario: {usuario}
+🔐 Contraseña: {contraseña}
+📦 Plan: {plan}
+{estado_expira}
+└───────────────
+
+4️⃣ Nueva cuenta
+5️⃣ Renovar cuenta
+{label_adultos}
+
+0️⃣ Volver al Menú
+
+[M46] MIS CUENTAS — 2+ cuentas
+Cuándo: Igual que M45 pero el cliente tiene múltiples cuentas.
+        Cada cuenta muestra 🟢 si vigente o 🔴 si vencida.
+---
+📺 *MIS CUENTAS MASTV*
+
+🟢 *Cuenta 1*
+┌───────────────
+👤 Usuario: {usuario1}
+🔐 Contraseña: {contraseña1}
+📦 Plan: {plan1}
+{estado_expira1}
+└───────────────
+
+🔴 *Cuenta 2*
+┌───────────────
+👤 Usuario: {usuario2}
+🔐 Contraseña: {contraseña2}
+📦 Plan: {plan2}
+{estado_expira2}
+└───────────────
+
+4️⃣ Nueva cuenta
+5️⃣ Renovar cuenta
+{label_adultos}
+0️⃣ Volver al Menú
+
+
+================================================================================
+SECCIÓN 11 — RENOVAR (opción 5)
+================================================================================
+
+[M47] RENOVAR — Sin cuenta registrada
+Cuándo: Cliente sin ninguna cuenta oficial escribe "5".
+---
+
+⚠️ *NO HAY CUENTAS REGISTRADAS*
+
+Para renovar una cuenta, primero necesitas tener una suscripción activa.
+
+━━━━━━━━━━━━━━━━━━
+
+3️⃣ Prueba gratis
+4️⃣ Ver planes y suscribirme
+
+0️⃣ Volver al Menú
+
+
+[M48] RENOVAR — Selección de cuenta (cliente con 2+ cuentas)
+Cuándo: Cliente con múltiples cuentas escribe "5".
+        Se listan las cuentas para elegir cuál renovar.
+---
+🔄 *RENOVAR CUENTA*
+
+Tienes *{N} cuentas* registradas.
+Selecciona cuál deseas renovar:
+
+1️⃣ *{usuario1}*
+   📦 {plan1}
+   📅 Expira: {fecha1}
+
+2️⃣ *{usuario2}*
+   📦 {plan2}
+   📅 Expira: {fecha2}
+
+👉 Escribe el número de la cuenta
+0️⃣ Volver al Menú
+
+
+[M49] RENOVAR — Buscando cuenta (mensaje de espera)
+Cuándo: Justo al entrar en la renovación rápida, antes del lookup en el panel.
+---
+🔍 *BUSCANDO TU CUENTA...*
+
+Por favor espera un momento.
+
+
+
+[M50] RENOVAR CUENTA RÁPIDA — Mostrar datos y opciones
+Cuándo: Se encontró la cuenta en el panel. Muestra datos actuales y opciones.
+        {label99} varía según el estado de la cuenta:
+          Cuenta activada + reminderSent=true → "🔄 *9️⃣9️⃣ Cambiar de plan* (incluye cambio de dispositivos)"
+          Cuenta no activada o sin reminderSent → "9️⃣9️⃣ Ver otros planes"
+        {estado_expira} igual que en M45
+---
+✅ *RENOVAR MI CUENTA*
+
+┌───────────────
+👤 Usuario: {usuario}
+🔐 Contraseña: {contraseña}
+└───────────────
+
+📦 Plan actual: *{dispositivos} Dispositivo(s) – {duracion}*
+{estado_expira}
+
+💳 Escribe *{precio}* para renovar el mismo plan
+({duracion} - {dispositivos} dispositivo(s) - Bs. {precio})
+
+{label99}
+0️⃣ Menú
+
+
+[M51] RENOVAR — Opción no válida en quick_renewal
+Cuándo: Cliente en estado "quick_renewal_" escribe algo que no es el precio
+        del plan actual, "99", ni "0".
+---
+⚠️ Opción no válida.
+
+Escribe *{precio}* para renovar tu plan actual
+9️⃣9️⃣ Ver otros planes
+0️⃣ Menú
+
+
+[M52] RENOVAR — Lista de planes disponibles (por dispositivos)
+Cuándo: Cliente escribe "99" en quick_renewal (cuenta aún no activada o sin
+        reminderSent). Se muestran solo los planes del mismo número de dispositivos.
+        {titulo} = "📺 *PLANES DE RENOVACIÓN — {N} Dispositivo(s)*\n👤 Cuenta: *{usuario}*"
+---
+📺 *PLANES DE RENOVACIÓN — {N} Dispositivo(s)*
+👤 Cuenta: *{usuario}*
+
+👉 Escribe el precio del plan
+
+▫️ {precio} → {duracion}
+▫️ {precio} → {duracion}
+...
+
+0️⃣ Volver al Menú
+
+
+[M53] RENOVAR — Lista de TODOS los planes (cambio de plan)
+Cuándo: Cliente escribe "99" en quick_renewal y tiene cuenta activada + reminderSent.
+        Se muestran todos los planes de todos los dispositivos.
+---
+📺 *PLANES DISPONIBLES — Todos los dispositivos*
+👤 Cuenta: *{usuario}*
+
+👉 Escribe el precio del plan
+
+📺 *1 DISPOSITIVO*
+▫️ 29 → 1 Mes
+▫️ 82 → 3 Meses
+▫️ 155 → 6 Meses + 1 Mes 🎁
+▫️ 300 → 12 Meses + 2 Meses 🎁
+
+📺 *2 DISPOSITIVOS*
+▫️ 35 → 1 Mes
+▫️ 100 → 3 Meses
+▫️ 190 → 6 Meses + 1 Mes 🎁
+▫️ 380 → 12 Meses + 2 Meses 🎁
+
+📺 *3 DISPOSITIVOS*
+▫️ 40 → 1 Mes
+▫️ 115 → 3 Meses
+▫️ 225 → 6 Meses + 1 Mes 🎁
+▫️ 440 → 12 Meses + 2 Meses 🎁
+
+0️⃣ Volver al Menú
+
+
+[M54] RENOVAR — Plan de dispositivos incorrecto
+Cuándo: Cliente en "selecting_renewal_plan" escribe precio de plan con distinto
+        número de dispositivos al de su cuenta (cuando NO es cambio de plan total).
+---
+⚠️ Solo puedes elegir planes de *{N} dispositivo(s)*.
+
+0️⃣ Volver al Menú
+
+
+
+[M55] RENOVAR — Opción no válida en selección de plan
+Cuándo: Cliente en "selecting_renewal_plan" escribe algo que no es precio ni "0".
+---
+⚠️ Selecciona un plan escribiendo el precio.
+
+0️⃣ Volver al Menú
+
+
+
+[M56] RENOVAR — Cuenta no encontrada en el panel
+Cuándo: Al buscar la cuenta en el panel IPTV para renovar, no se encuentra.
+        La cuenta se elimina de la base de datos.
+---
+⚠️ *CUENTA NO DISPONIBLE*
+
+La cuenta *{usuario}* ya no se encuentra activa en el sistema.
+
+━━━━━━━━━━━━━━━━━━
+
+4️⃣ Crear nueva cuenta
+
+0️⃣ Volver al Menú
+
+
+[M57] RENOVAR — Error genérico buscando cuenta
+Cuándo: Error al buscar la cuenta en el panel (distinto a "no encontrada").
+---
+⚠️ *NO SE PUDO VERIFICAR LA CUENTA*
+
+Ocurrió un problema temporal al consultar la cuenta *{usuario}*.
+
+📞 Por favor contacta soporte:
+64598912
+
+0️⃣ Volver al Menú
+
+[M58] RENOVAR — Opción no válida en selección de cuenta
+Cuándo: Cliente en "selecting_account_to_renew" escribe número fuera de rango.
+---
+⚠️ *OPCIÓN NO VÁLIDA*
+
+Selecciona una cuenta escribiendo un número del *1 al {N}*.
+
+0️⃣ Volver al Menú
+
+
+
+================================================================================
+SECCIÓN 12 — RECORDATORIO DE VENCIMIENTO (automático, 1 día antes)
+================================================================================
+
+[M59] RECORDATORIO DE VENCIMIENTO — Con imagen QR
+Cuándo: 24 horas antes de la fecha de expiración de la cuenta, el bot envía
+        automáticamente este recordatorio. Se envía como imagen (./recursos/qr.jpg)
+        con este caption. Si no hay imagen, se envía como texto puro.
+        Cuando {precio_renovacion} existe, se pre-carga el pago manual.
+---
+
+⏰ TU CUENTA VENCE EN 24 HORAS
+
+┌───────────────
+👤 Usuario: {usuario}
+🔐 Contraseña: {contraseña}
+└───────────────
+
+📅 Expira: {fecha}
+📦 Plan: {dispositivos} dispositivo(s) — {duracion}
+💰 Renovación: Bs. {precio}
+
+━━━━━━━━━━━━━━━━━━
+
+📲 Para renovar el mismo plan, realiza el pago al QR mostrado arriba.
+
+✅ Luego envía:
+• Tu comprobante de pago
+o
+• El nombre del titular de la transferencia
+
+5️⃣ Cambiar de plan
+0️⃣ Volver al Menú
+
+================================================================================
+SECCIÓN 13 — CANALES ADULTOS (opción 8)
+================================================================================
+
+[M60] CANALES ADULTOS — Confirmación (1 sola cuenta)
+Cuándo: Cliente con una sola cuenta escribe "8".
+        {accion} = "ACTIVAR" ó "DESACTIVAR"
+        {estado_actual} = "✅ Activados" ó "❌ Desactivados"
+---
+🔞 *{accion} CONTENIDO ADULTOS (+18)*
+
+👤 Cuenta: *{usuario}*
+Estado actual: {estado_actual}
+
+¿Confirmas que deseas {accion_lower} el contenido adulto?
+
+1️⃣ Sí, {accion_lower}
+0️⃣ Cancelar
+
+
+[M61] CANALES ADULTOS — Seleccionar cuenta (2+ cuentas)
+Cuándo: Cliente con múltiples cuentas escribe "8".
+---
+🔞 *CONTENIDO ADULTOS (+18)*
+
+¿En qué cuenta deseas cambiar el estado?
+
+1️⃣ *{usuario1}* — adultos: ✅
+2️⃣ *{usuario2}* — adultos: ❌
+
+👉 Escribe el número de la cuenta
+0️⃣ Cancelar
+
+
+[M62] CANALES ADULTOS — Procesando cambio (mensaje de espera)
+Cuándo: Cliente confirma el cambio de canales adultos. Se avisa antes de ejecutar.
+---
+⏳ *{Activando/Desactivando} contenido adulto...*
+
+Por favor espera un momento.
+
+
+
+[M63] CANALES ADULTOS — Cambio exitoso
+Cuándo: Se aplicó el cambio de canales adultos correctamente en el panel.
+---
+
+✅ *Contenido adulto {activado/desactivado}*
+
+👤 Cuenta: *{usuario}*
+
+{El contenido +18 ya está disponible en tu cuenta. / El contenido adulto fue removido de tu cuenta.}
+
+⚠️ Para ver los cambios reflejados, actualiza 🔄 el contenido en la aplicación.
+
+0️⃣ Volver al Menú
+
+
+
+[M64] CANALES ADULTOS — Error en el cambio
+Cuándo: Falló la operación en el panel al activar/desactivar canales adultos.
+---
+⚠️ *NO SE PUDO ACTUALIZAR EL CONTENIDO ADULTO*
+
+Ocurrió un problema temporal al aplicar los cambios en la cuenta:
+
+👤 *{usuario}*
+
+📞 Por favor solicita el cambio al soporte:
+64598912
+
+0️⃣ Volver al Menú
+
+
+
+[M65] CANALES ADULTOS — Opción no válida
+Cuándo: Cliente en "confirming_adultos_activation" escribe algo distinto a 1/0.
+---
+⚠️ Opción no válida.
+
+1️⃣ Sí, activar
+0️⃣ Cancelar
+
+
+[M66] CANALES ADULTOS — Opción no válida en selección de cuenta
+Cuándo: Cliente en "selecting_account_adultos" escribe número fuera de rango.
+---
+⚠️ Opción no válida. Escribe un número del 1 al {N}
+
+0️⃣ Cancelar
+
+
+================================================================================
+SECCIÓN 14 — COMUNIDAD (opción 6, clientes con cuenta)
+================================================================================
+
+[M67] COMUNIDAD MASTV
+Cuándo: Cliente con cuenta oficial escribe "6".
+        Se envían primero fotos/videos de ./recursos/comunidad1.jpg, etc.
+---
+🌐 *COMUNIDAD MASTV*
+
+Mantente informado sobre:
+
+⚽ Eventos deportivos en vivo
+🥊 UFC • WWE • Boxeo
+🏀 NBA • Fórmula 1
+📢 Novedades y actualizaciones
+
+━━━━━━━━━━━━━━━━━━
+
+👉 Únete al grupo oficial:
+
+https://chat.whatsapp.com/HLYHIzvJsKC3xmO6jduQc5
+
+━━━━━━━━━━━━━━━━━━
+
+0️⃣ Volver al Menú
+
+
+================================================================================
+SECCIÓN 15 — QUIERO VENDER / REVENTA (opción 6, clientes sin cuenta)
+================================================================================
+
+[M68] SISTEMA DE REVENTA
+Cuándo: Cliente sin cuenta oficial escribe "6".
+        Se envían primero imágenes de precios (./recursos/img4.png, img5.png).
+---
+📢 *SISTEMA DE REVENTA MASTV*
+
+MASTV trabaja con un sistema de créditos que te permite crear y renovar cuentas IPTV para tus clientes.
+
+📺 *USO DE CRÉDITOS*
+🟡 Crear cuenta 1 dispositivo / 1 mes → *0.50 créditos*
+🔵 Crear cuenta 2 dispositivos / 1 mes → *0.75 créditos*
+🟢 Crear cuenta 3 dispositivos / 1 mes → *1 crédito*
+
+🎁 *DEMOS*
+Puedes generar demos ilimitados para pruebas (solo para mostrar el servicio).
+
+💰 *EJEMPLO DE GANANCIA*
+Compra de crédito: *18 Bs*
+Venta de 1 cuenta: *40 Bs*
+
+🚨 *REGLAS OBLIGATORIAS*
+▪️ Debes respetar los precios mínimos
+▪️ PROHIBIDO vender más barato
+
+⚠️ *Si incumples:*
+▪️ Pierdes créditos
+▪️ Se bloquea tu cuenta
+▪️ Pierdes clientes
+▪️ Baneo permanente sin aviso
+
+🚫 *SIN EXCEPCIONES*
+No hay devoluciones ni reclamos.
+
+⚖️ *¿POR QUÉ SE TRABAJA ASÍ?*
+Para mantener igualdad entre revendedores y evitar que alguien dañe el mercado bajando precios.
+
+
+📲 ¿Te interesa unirte?
+
+7️⃣ Hablar con soporte
+0️⃣ Volver al Menú
+
+================================================================================
+SECCIÓN 16 — ASESOR / SOPORTE (opción 7)
+================================================================================
+
+[M69] CONTACTO ASESOR / SOPORTE
+Cuándo: Cliente escribe "7" en el menú principal.
+---
+
+🛠 *SOPORTE TÉCNICO*
+
+Si presentas algún problema con el servicio:
+
+✍️ Escríbenos o envíanos una foto 📸 o video 🎥 del inconveniente.
+
+📞 Soporte: *64598912*
+
+━━━━━━━━━━━━━━━━━━
+
+0️⃣ Volver al Menú
+
+
+================================================================================
+SECCIÓN 17 — VALIDACIONES DE NOMBRE
+================================================================================
+
+[M70] NOMBRE INVÁLIDO — Vacío o solo espacios
+Cuándo: Cliente deja el nombre en blanco al registrarse (para demo o suscripción).
+---
+⚠️ *NOMBRE NO VÁLIDO*
+
+No puedes dejar el nombre vacío ni poner solo espacios.
+
+👉 Escribe tu nombre
+0️⃣ Volver al menú
+
+
+[M71] NOMBRE INVÁLIDO — Formato incorrecto
+Cuándo: El nombre tiene números, caracteres especiales o menos de 4 letras.
+---
+⚠️ *NOMBRE INVÁLIDO*
+
+El nombre debe cumplir con:
+✅ Mínimo 4 caracteres
+✅ Solo letras y espacios
+❌ Sin números ni caracteres especiales
+
+Ejemplo válido: *Juan*
+
+👉 Escribe tu nombre
+0️⃣Cancelar
+
+
+================================================================================
+SECCIÓN 18 — ERROR GENERAL
+================================================================================
+
+[M72] ERROR INESPERADO
+Cuándo: Excepción no controlada en el manejador principal.
+        Se limpia el estado del usuario.
+---
+⚠️ Hubo un error. Intenta de nuevo escribiendo *menu*
+
+
+================================================================================
+SECCIÓN 19 — COMANDOS ADMIN (solo número 64598912)
+================================================================================
+
+[M73] ADMIN — demos off confirmado
+Cuándo: Admin escribe "demos off".
+---
+🔴 *DEMOS DESHABILITADAS*
+
+
+[M74] ADMIN — demos on confirmado
+Cuándo: Admin escribe "demos on".
+---
+🟢 *DEMOS HABILITADAS*
+
+
+[M75] ADMIN — demos status
+Cuándo: Admin escribe "demos status".
+---
+📊 Demos: 🟢 Habilitadas
+  — ó —
+📊 Demos: 🔴 Deshabilitadas
+
+
+[M76] ADMIN — lista de pagos QR activos
+Cuándo: Admin escribe "pagos".
+---
+💳 *PAGOS PENDIENTES: {N}*
+
+• {telefono} | Bs.{precio} | {tipo} | ⏳ {tiempo_restante}
+• ...
+
+
+[M77] ADMIN — setfecha formato incorrecto
+Cuándo: Admin escribe "setfecha" con menos de 3 partes.
+---
+⚠️ Formato: *setfecha <usuario> DD/MM/YYYY*
+Ejemplo: setfecha abc12 15/09/2026
+
+
+[M78] ADMIN — setfecha fecha inválida
+Cuándo: Admin escribe "setfecha usuario FECHA" con formato de fecha incorrecto.
+---
+⚠️ Formato de fecha inválido. Usá DD/MM/YYYY
+Ejemplo: 15/09/2026
+
+
+[M79] ADMIN — setfecha usuario no encontrado
+Cuándo: Admin escribe "setfecha" con un usuario que no existe en la base de datos.
+---
+❌ No se encontró el usuario *{usuario}*
+
+
+[M80] ADMIN — setfecha exitoso
+Cuándo: Admin actualizó la fecha de expiración correctamente.
+---
+✅ Fecha actualizada
+
+👤 Usuario: {usuario}
+📅 Nueva fecha: {fecha}
+
+
+[M81] ADMIN — vercliente usuario no encontrado
+Cuándo: Admin escribe "vercliente usuario" y no existe.
+---
+❌ No se encontró el usuario *{usuario}*
+
+
+[M82] ADMIN — vercliente datos del cliente
+Cuándo: Admin escribe "vercliente usuario" y existe en la base de datos.
+---
+👤 *{nombre}*
+📱 Celular: {celular}
+🔑 Usuario: {usuario}
+🔐 Password: {contraseña}
+📦 Plan: {plan}
+📅 Expira: {fecha}
+
+
+================================================================================
+FIN DEL DOCUMENTO
+Total de mensajes catalogados: 82
+================================================================================

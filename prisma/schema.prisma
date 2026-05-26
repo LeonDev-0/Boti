@@ -16,13 +16,36 @@ model User {
   usuario  String   @unique
   password String?
   celular     String
-  plan    String?
-  expiresAt DateTime?
-  createdAt DateTime @default(now())
+  plan         String?
+  expiresAt    DateTime?
+  reminderSent  Boolean   @default(false)
+  adultChannels Boolean   @default(true)
+  activated     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
 }
 
 model Config {
   id    Int    @id @default(autoincrement())
   key   String @unique
   value String
+}
+
+model DemoHistory {
+  id         Int       @id @default(autoincrement())
+  celular    String    @unique
+  count      Int       @default(0)
+  lastDemoAt DateTime?
+  updatedAt  DateTime  @updatedAt
+}
+
+model Transaccion {
+  id         Int      @id @default(autoincrement())
+  tipo       String   // 'nueva' | 'renovacion'
+  plan       String
+  precio     Float
+  creditos   Float
+  costo      Float
+  ganancia   Float
+  phoneNumber String
+  fecha      DateTime @default(now())
 }

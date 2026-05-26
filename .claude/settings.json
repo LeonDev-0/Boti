@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm list *)",
+      "Bash(node -e \"import\\('telegraf'\\).then\\(\\({Telegraf}\\)=>{ const b=new Telegraf\\('8673050602:AAFuGN6e_JbRV_MRJ-mq2NfZ1RWZE1ftGBE'\\); b.telegram.getMe\\(\\).then\\(r=>console.log\\('✅ Bot conectado:',r\\)\\).catch\\(e=>console.error\\('❌ Error:',e.message\\)\\) }\\)\")",
+      "Bash(git tag *)",
+      "Bash(git checkout *)",
+      "Bash(npm install *)",
+      "Bash(git commit *)"
+    ]
+  }
+}

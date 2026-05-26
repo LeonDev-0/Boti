@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN "adultChannels" BOOLEAN NOT NULL DEFAULT 1;

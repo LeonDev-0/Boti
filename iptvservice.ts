@@ -6,9 +6,51 @@ import puppeteer, { Browser, Page } from 'puppeteer'
 let browser: Browser | null = null
 
 // ===============================
+// PANEL URLs (índice 0 = principal)
+// ===============================
+const PANEL_BASES = [
+  'https://resellermastv.com:8443',  // principal
+  'http://resellermastv.com:8080',   // fallback
+]
+let activePanelIndex = 0
+
+// ===============================
 // UTILS
 // ===============================
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+const PANEL_CREDENTIALS = { username: 'zandrotja', password: 'leon1234' }
+
+async function navegarConLogin(page: Page, path: string): Promise<void> {
+  const intentar = async (baseIndex: number): Promise<void> => {
+    const url = `${PANEL_BASES[baseIndex]}${path}`
+    console.log(`🌐 Conectando a: ${url}`)
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 })
+
+    const esLoginPage = await page.$('input[placeholder="Email/Username"]') !== null
+    if (!esLoginPage) return
+
+    console.log('🔐 Detectada página de login, iniciando sesión automáticamente...')
+    await page.type('#username', PANEL_CREDENTIALS.username, { delay: 80 })
+    await page.type('#password', PANEL_CREDENTIALS.password, { delay: 80 })
+    const rememberMe = await page.$('#remember_me')
+    if (rememberMe) await rememberMe.click()
+    await page.click('button[type="submit"]')
+    await page.waitForNavigation({ waitUntil: 'networkidle2' })
+    console.log('✅ Login exitoso')
+    await page.goto(`${PANEL_BASES[baseIndex]}${path}`, { waitUntil: 'networkidle2' })
+  }
+
+  try {
+    await intentar(activePanelIndex)
+  } catch (e: any) {
+    const fallbackIndex = activePanelIndex === 0 ? 1 : 0
+    console.warn(`⚠️ Panel principal falló (${PANEL_BASES[activePanelIndex]}): ${e.message}`)
+    console.log(`🔄 Cambiando a panel alternativo: ${PANEL_BASES[fallbackIndex]}`)
+    activePanelIndex = fallbackIndex
+    await intentar(activePanelIndex)
+  }
+}
 
 function generarUsuario(): string {
   const l = 'abcdefghijklmnopqrstuvwxyz'
@@ -17,6 +59,7 @@ function generarUsuario(): string {
     l[Math.floor(Math.random() * 26)] +
     l[Math.floor(Math.random() * 26)] +
     l[Math.floor(Math.random() * 26)] +
+    n[Math.floor(Math.random() * 10)] +
     n[Math.floor(Math.random() * 10)] +
     n[Math.floor(Math.random() * 10)]
   )
@@ -28,9 +71,16 @@ function generarUsuario(): string {
 async function initBrowser(): Promise<void> {
   if (!browser) {
     browser = await puppeteer.launch({
-      headless: false,
-      userDataDir: './panel-profile',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      headless: true,
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-first-run',
+        '--no-zygote',
+      ]
     })
   }
 }
@@ -78,14 +128,18 @@ async function filtrarPorUsuario(page: Page, usuario: string): Promise<void> {
 
   await page.type(selector, usuario, { delay: 200 })
 
-  await page.waitForFunction(
-    (usuario) => {
-      const rows = document.querySelectorAll('tr.mantine-Table-tr')
-      return Array.from(rows).some(r => r.textContent?.includes(usuario))
-    },
-    { timeout: 20000 },
-    usuario
-  )
+  try {
+    await page.waitForFunction(
+      (usuario) => {
+        const rows = document.querySelectorAll('tr.mantine-Table-tr')
+        return Array.from(rows).some(r => r.textContent?.includes(usuario))
+      },
+      { timeout: 20000 },
+      usuario
+    )
+  } catch {
+    throw new Error(`No se encontró el usuario: ${usuario}`)
+  }
 }
 
 // ===============================
@@ -95,6 +149,7 @@ async function extraerDatosFila(page: Page, usuario: string): Promise<{
   usuario: string
   password: string
   plan: string
+  expira: string
 }> {
   const data = await page.evaluate((usuario) => {
     const rows = Array.from(document.querySelectorAll('tr.mantine-Table-tr'))
@@ -106,7 +161,8 @@ async function extraerDatosFila(page: Page, usuario: string): Promise<{
       return {
         usuario: username,
         password: row.querySelector('td[data-index="3"] p')?.textContent?.trim() || '',
-        paquete: row.querySelector('td[data-index="7"]')?.textContent?.trim() || ''
+        expira:   row.querySelector('td[data-index="5"] p')?.getAttribute('title') || row.querySelector('td[data-index="5"] p')?.textContent?.trim() || '',
+        paquete:  row.querySelector('td[data-index="7"]')?.textContent?.trim() || ''
       }
     }
     return null
@@ -118,19 +174,51 @@ async function extraerDatosFila(page: Page, usuario: string): Promise<{
   console.log('✅ Datos extraídos:')
   console.log('  👤 Usuario:', data.usuario)
   console.log('  🔐 Password:', data.password)
+  console.log('  📅 Expira:', data.expira)
   console.log('  📦 Paquete:', data.paquete)
 
-  return { usuario: data.usuario, password: data.password, plan: data.paquete }
+  return { usuario: data.usuario, password: data.password, plan: data.paquete, expira: data.expira }
 }
 
 // ===============================
 // INTENTAR CREAR UN USUARIO (un solo intento)
 // Devuelve los datos si tuvo éxito, lanza error si falló
 // ===============================
-async function intentarCrearUsuario(planTexto: string): Promise<{
+async function quitarCanalesAdultos(page: Page): Promise<void> {
+  const adultValues = ['103', '105', '153']
+  await page.evaluate((vals) => {
+    document.querySelectorAll<HTMLSelectElement>('select').forEach(sel => {
+      if (sel.name?.includes('bouquet') || sel.id?.includes('bouquet')) {
+        Array.from(sel.options).forEach(opt => {
+          if (vals.includes(opt.value)) opt.selected = false
+        })
+      }
+    })
+  }, adultValues)
+  await delay(500)
+  console.log('🚫 Canales adultos removidos del formulario')
+}
+
+async function seleccionarCanalesAdultos(page: Page): Promise<void> {
+  const adultValues = ['103', '105', '153']
+  await page.evaluate((vals) => {
+    document.querySelectorAll<HTMLSelectElement>('select').forEach(sel => {
+      if (sel.name?.includes('bouquet') || sel.id?.includes('bouquet')) {
+        Array.from(sel.options).forEach(opt => {
+          if (vals.includes(opt.value)) opt.selected = true
+        })
+      }
+    })
+  }, adultValues)
+  await delay(500)
+  console.log('✅ Canales adultos seleccionados en el formulario')
+}
+
+async function intentarCrearUsuario(planTexto: string, incluirAdultos = true): Promise<{
   usuario: string
   password: string
   plan: string
+  expira: string
 }> {
   if (!browser) throw new Error('No se pudo inicializar el navegador')
 
@@ -141,10 +229,7 @@ async function intentarCrearUsuario(planTexto: string): Promise<{
 
   try {
     console.log('🌐 Navegando al panel...')
-    await page.goto(
-      'https://resellermastv.com:8443/lines/create-with-package',
-      { waitUntil: 'networkidle2' }
-    )
+    await navegarConLogin(page, '/lines/create-with-package')
 
     console.log('📝 Escribiendo usuario...')
     await page.type('input[name="username"]', usuario)
@@ -154,6 +239,11 @@ async function intentarCrearUsuario(planTexto: string): Promise<{
 
     console.log('⏳ Esperando 3 segundos...')
     await delay(3000)
+
+    if (!incluirAdultos) {
+      console.log('🚫 Removiendo canales adultos...')
+      await quitarCanalesAdultos(page)
+    }
 
     console.log('💾 Enviando formulario...')
     await page.evaluate(() => {
@@ -181,10 +271,11 @@ async function intentarCrearUsuario(planTexto: string): Promise<{
 // ===============================
 // FLUJO PRINCIPAL — reintentos con nuevo usuario si falla
 // ===============================
-export async function crearUsuarioIPTV(planTexto: string): Promise<{
+export async function crearUsuarioIPTV(planTexto: string, incluirAdultos = true): Promise<{
   usuario: string
   password: string
   plan: string
+  expira: string
 }> {
   await initBrowser()
 
@@ -194,7 +285,7 @@ export async function crearUsuarioIPTV(planTexto: string): Promise<{
   for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
     console.log(`\n🔁 Intento ${intento}/${MAX_INTENTOS}`)
     try {
-      const result = await intentarCrearUsuario(planTexto)
+      const result = await intentarCrearUsuario(planTexto, incluirAdultos)
       console.log(`✅ Usuario creado exitosamente en intento ${intento}`)
       return result
     } catch (e: any) {
@@ -209,6 +300,45 @@ export async function crearUsuarioIPTV(planTexto: string): Promise<{
 
   console.error(`❌ crearUsuarioIPTV falló después de ${MAX_INTENTOS} intentos`)
   throw ultimoError ?? new Error('No se pudo crear el usuario IPTV')
+}
+
+// ===============================
+// LEER CRÉDITOS DEL PANEL
+// ===============================
+export async function leerCreditosPanel(): Promise<number | null> {
+  await initBrowser()
+  const page = await browser!.newPage()
+  try {
+    await navegarConLogin(page, '/dashboard')
+    await page.waitForFunction(() => {
+      const candidatos = document.querySelectorAll('p[data-size="xs"]')
+      for (const p of candidatos) {
+        const style = p.getAttribute('style') || ''
+        if (!style.includes('margin-left')) continue
+        const val = parseFloat((p as HTMLElement).innerText?.trim() || '')
+        if (!isNaN(val) && val > 0) return true
+      }
+      return false
+    }, { timeout: 20000 })
+
+    const creditos = await page.evaluate(() => {
+      const candidatos = document.querySelectorAll('p[data-size="xs"]')
+      for (const p of candidatos) {
+        const style = p.getAttribute('style') || ''
+        if (!style.includes('margin-left')) continue
+        const val = parseFloat((p as HTMLElement).innerText?.trim() || '')
+        if (!isNaN(val) && val > 0) return val
+      }
+      return null
+    })
+    console.log(`🪙 Créditos en panel: ${creditos}`)
+    return typeof creditos === 'number' && !isNaN(creditos) ? creditos : null
+  } catch (e: any) {
+    console.error('❌ Error leyendo créditos del panel:', e.message)
+    return null
+  } finally {
+    await page.close()
+  }
 }
 
 // ===============================
@@ -239,10 +369,7 @@ export async function buscarUsuarioIPTV(usuario: string): Promise<{
 
   try {
     console.log('🌐 Navegando al panel...')
-    await page.goto(
-      'https://resellermastv.com:8443/lines',
-      { waitUntil: 'networkidle2' }
-    )
+    await navegarConLogin(page, '/lines')
 
     console.log('🔍 Buscando usuario:', usuario)
     await filtrarPorUsuario(page, usuario)
@@ -259,10 +386,10 @@ export async function buscarUsuarioIPTV(usuario: string): Promise<{
           usuario,
           password:   row.querySelector('td[data-index="3"] p')?.textContent?.trim() || '',
           reseller:   row.querySelector('td[data-index="4"] p')?.textContent?.trim() || '',
-          expira:     row.querySelector('td[data-index="5"]')?.textContent?.trim() || '',
-          baneado:    row.querySelector('td[data-index="6"] span')?.textContent?.trim() || '',
+          expira:     row.querySelector('td[data-index="5"] p')?.getAttribute('title') || row.querySelector('td[data-index="5"] p')?.textContent?.trim() || '',
+          baneado:    '',
           paquete:    row.querySelector('td[data-index="7"]')?.textContent?.trim() || '',
-          trial:      row.querySelector('td[data-index="8"] span')?.textContent?.trim() || '',
+          trial:      '',
           conexiones: row.querySelector('td[data-index="9"] p')?.textContent?.trim() || '',
           creado:     row.querySelector('td[data-index="13"]')?.textContent?.trim() || ''
         }
@@ -271,6 +398,15 @@ export async function buscarUsuarioIPTV(usuario: string): Promise<{
     }, usuario)
 
     if (!data) throw new Error(`No se encontró el usuario: ${usuario}`)
+
+    console.log(`━━━━━━ CUENTA ENCONTRADA: ${data.usuario} ━━━━━━`)
+    console.log(`  🔐 Password:   ${data.password}`)
+    console.log(`  📅 Expira:     ${data.expira}`)
+    console.log(`  📦 Paquete:    ${data.paquete}`)
+    console.log(`  👤 Reseller:   ${data.reseller}`)
+    console.log(`  🔗 Conexiones: ${data.conexiones}`)
+    console.log(`  📆 Creado:     ${data.creado}`)
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
 
     return data
 
@@ -290,10 +426,7 @@ export async function renovarUsuarioIPTV(usuario: string, planTexto: string): Pr
 
   try {
     console.log('🌐 Navegando al panel...')
-    await page.goto(
-      'https://resellermastv.com:8443/lines',
-      { waitUntil: 'networkidle2' }
-    )
+    await navegarConLogin(page, '/lines')
 
     console.log('🔍 Buscando usuario:', usuario)
     await filtrarPorUsuario(page, usuario)
@@ -422,17 +555,177 @@ export async function renovarUsuarioIPTV(usuario: string, planTexto: string): Pr
 
   } catch (error) {
     console.error('❌ Error renovando usuario:', error)
+    throw error
 
-    try {
-      await page.screenshot({
-        path: `./error_renovacion_${usuario}_${Date.now()}.png`,
-        fullPage: true
-      })
-      console.log('📸 Screenshot de error guardado')
-    } catch (screenshotError) {
-      console.error('No se pudo tomar screenshot')
-    }
+  } finally {
+    await page.close()
+  }
+}
 
+// ===============================
+// ACTIVAR CANALES ADULTOS EN CUENTA EXISTENTE
+// ===============================
+export async function activarAdultosEnUsuario(usuario: string): Promise<void> {
+  await initBrowser()
+  if (!browser) throw new Error('No se pudo inicializar el navegador')
+
+  const page = await browser.newPage()
+
+  try {
+    console.log('🌐 Navegando al panel...')
+    await navegarConLogin(page, '/lines')
+
+    console.log('🔍 Buscando usuario:', usuario)
+    await filtrarPorUsuario(page, usuario)
+
+    await delay(2000)
+
+    console.log('⚙️ Haciendo clic en el botón de ajustes...')
+    const adjustButtonClicked = await page.evaluate((usuario) => {
+      const rows = Array.from(document.querySelectorAll('tr.mantine-Table-tr'))
+      for (const row of rows) {
+        const username = row.querySelector('td[data-index="2"] p')?.textContent?.trim()
+        if (username === usuario) {
+          const actionsCell = row.querySelector('td[data-index="14"]')
+          const adjustButtons = actionsCell?.querySelectorAll('button.mantine-ActionIcon-root[data-variant="light"]')
+          if (adjustButtons) {
+            for (const btn of Array.from(adjustButtons)) {
+              const hasAdjustIcon = btn.querySelector('svg.tabler-icon-adjustments')
+              if (hasAdjustIcon) {
+                (btn as HTMLElement).click()
+                return true
+              }
+            }
+          }
+        }
+      }
+      return false
+    }, usuario)
+
+    if (!adjustButtonClicked) throw new Error('No se encontró el botón de ajustes para el usuario')
+
+    await delay(1000)
+
+    console.log('✏️ Haciendo clic en "Edit"...')
+    await page.waitForSelector('[role="menu"]', { timeout: 5000 })
+
+    const editClicked = await page.evaluate(() => {
+      const menuItems = Array.from(document.querySelectorAll('[role="menuitem"]'))
+      for (const item of menuItems) {
+        const label = item.querySelector('.mantine-Menu-itemLabel')?.textContent?.trim()
+        if (label === 'Edit') {
+          (item as HTMLElement).click()
+          return true
+        }
+      }
+      return false
+    })
+
+    if (!editClicked) throw new Error('No se encontró la opción "Edit" en el menú')
+
+    console.log('⏳ Esperando formulario de edición...')
+    await page.waitForNavigation({ waitUntil: 'networkidle2' })
+    await delay(2000)
+
+    console.log('🔞 Activando canales adultos...')
+    await seleccionarCanalesAdultos(page)
+
+    console.log('💾 Guardando cambios...')
+    await page.evaluate(() => {
+      document.querySelector<HTMLButtonElement>('#submitBtn')
+        ?.closest('form')
+        ?.submit()
+    })
+
+    await page.waitForNavigation({ waitUntil: 'networkidle2' })
+    console.log('✅ Canales adultos activados para:', usuario)
+
+  } catch (error) {
+    console.error('❌ Error activando canales adultos:', error)
+    throw error
+
+  } finally {
+    await page.close()
+  }
+}
+
+// ===============================
+// DESACTIVAR CANALES ADULTOS EN CUENTA EXISTENTE
+// ===============================
+export async function desactivarAdultosEnUsuario(usuario: string): Promise<void> {
+  await initBrowser()
+  if (!browser) throw new Error('No se pudo inicializar el navegador')
+
+  const page = await browser.newPage()
+
+  try {
+    console.log('🌐 Navegando al panel...')
+    await navegarConLogin(page, '/lines')
+
+    console.log('🔍 Buscando usuario:', usuario)
+    await filtrarPorUsuario(page, usuario)
+
+    await delay(2000)
+
+    const adjustButtonClicked = await page.evaluate((usuario) => {
+      const rows = Array.from(document.querySelectorAll('tr.mantine-Table-tr'))
+      for (const row of rows) {
+        const username = row.querySelector('td[data-index="2"] p')?.textContent?.trim()
+        if (username === usuario) {
+          const actionsCell = row.querySelector('td[data-index="14"]')
+          const adjustButtons = actionsCell?.querySelectorAll('button.mantine-ActionIcon-root[data-variant="light"]')
+          if (adjustButtons) {
+            for (const btn of Array.from(adjustButtons)) {
+              const hasAdjustIcon = btn.querySelector('svg.tabler-icon-adjustments')
+              if (hasAdjustIcon) {
+                (btn as HTMLElement).click()
+                return true
+              }
+            }
+          }
+        }
+      }
+      return false
+    }, usuario)
+
+    if (!adjustButtonClicked) throw new Error('No se encontró el botón de ajustes para el usuario')
+
+    await delay(1000)
+
+    await page.waitForSelector('[role="menu"]', { timeout: 5000 })
+
+    const editClicked = await page.evaluate(() => {
+      const menuItems = Array.from(document.querySelectorAll('[role="menuitem"]'))
+      for (const item of menuItems) {
+        const label = item.querySelector('.mantine-Menu-itemLabel')?.textContent?.trim()
+        if (label === 'Edit') {
+          (item as HTMLElement).click()
+          return true
+        }
+      }
+      return false
+    })
+
+    if (!editClicked) throw new Error('No se encontró la opción "Edit" en el menú')
+
+    await page.waitForNavigation({ waitUntil: 'networkidle2' })
+    await delay(2000)
+
+    console.log('🚫 Desactivando canales adultos...')
+    await quitarCanalesAdultos(page)
+
+    await page.evaluate(() => {
+      document.querySelector<HTMLButtonElement>('#submitBtn')
+        ?.closest('form')
+        ?.submit()
+    })
+
+    await page.waitForNavigation({ waitUntil: 'networkidle2' })
+
+    console.log('✅ Canales adultos desactivados para:', usuario)
+
+  } catch (error) {
+    console.error('❌ Error desactivando canales adultos:', error)
     throw error
 
   } finally {

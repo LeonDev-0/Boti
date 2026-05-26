@@ -73,7 +73,12 @@ async function procesarConCola(sock: WASocket, msg: any, jid: string): Promise<v
   }
 }
 
+let botGlobalPausado = false
+export function setBotPausado(pausado: boolean): void { botGlobalPausado = pausado }
+export function isBotPausado(): boolean { return botGlobalPausado }
+
 export async function handleMessage(sock: WASocket, msg: any): Promise<void> {
+  if (botGlobalPausado) return
   await encolarMensaje(sock, msg)
 }
 
@@ -138,6 +143,8 @@ interface PagoPendiente {
   generadoEn: number
   vigenciaMs: number
   lastChecked: number
+  titulo?: string
+  esActivacionDemo?: boolean
 }
 
 const pagosPendientes = new Map<string, PagoPendiente>()
@@ -153,6 +160,8 @@ interface PagoManual {
   tipo: 'nueva' | 'renovacion'
   usuarioIPTV?: string
   existingUserId?: number
+  titulo?: string
+  esActivacionDemo?: boolean
   timestamp: number
 }
 const pagosManualPendientes = new Map<string, PagoManual>()
@@ -424,7 +433,7 @@ export function iniciarPollerPagos(): void {
           if (pago.tipo === 'nueva') {
             await procesarCuentaNueva(pago.jid, pago.phoneNumber, pago.precio, pago.nombre, pago.existingUserId)
           } else {
-            await procesarRenovacion(pago.jid, pago.phoneNumber, pago.precio, pago.usuarioIPTV!, pago.existingUserId!)
+            await procesarRenovacion(pago.jid, pago.phoneNumber, pago.precio, pago.usuarioIPTV!, pago.existingUserId!, pago.esActivacionDemo)
           }
         }
       } catch (e: any) {
@@ -445,7 +454,7 @@ export function iniciarPollerPagos(): void {
 // =============================================
 const activationPollers = new Map<string, ReturnType<typeof setInterval>>()
 
-function iniciarPollerActivacion(usuario: string, dbUserId: number): void {
+export function iniciarPollerActivacion(usuario: string, dbUserId: number): void {
   if (activationPollers.has(usuario)) return
 
   console.log(`👀 Poller activación iniciado para: ${usuario}`)
@@ -455,6 +464,14 @@ function iniciarPollerActivacion(usuario: string, dbUserId: number): void {
 
   const intervalo = setInterval(async () => {
     try {
+      const existe = await prisma.user.findUnique({ where: { id: dbUserId }, select: { id: true } })
+      if (!existe) {
+        clearInterval(intervalo)
+        activationPollers.delete(usuario)
+        console.warn(`⚠️ Poller (${usuario}) detenido — usuario ya no existe en la base de datos`)
+        return
+      }
+
       const { buscarUsuarioIPTV } = await import('./iptvservice.js')
       const data = await buscarUsuarioIPTV(usuario)
       noEncontradoCount = 0
@@ -502,6 +519,10 @@ function iniciarPollerActivacion(usuario: string, dbUserId: number): void {
           console.warn(`🗑️ Cuenta ${usuario} eliminada de DB tras ${MAX_NO_ENCONTRADO} intentos fallidos`)
           try { await prisma.user.delete({ where: { id: dbUserId } }) } catch {}
         }
+      } else if (e?.code === 'P2025' || msg.includes('record to update not found')) {
+        clearInterval(intervalo)
+        activationPollers.delete(usuario)
+        console.warn(`⚠️ Poller (${usuario}) detenido — usuario eliminado de la base de datos`)
       } else {
         console.error(`❌ Error en poller activación (${usuario}):`, e.message)
       }
@@ -580,7 +601,7 @@ async function enviarRecordatorio(user: { id: number; usuario: string; celular: 
       `👤 Usuario: *${user.usuario}*\n` +
       `🔐 Contraseña: *${dbUser?.password || '-'}*\n` +
       `└───────────────\n\n` +
-      `📅 Expira: *${fechaExp}*\n` +
+      `🗓️ Expira: *${fechaExp}*\n` +
       `${planLineas}\n` +
       `━━━━━━━━━━━━━━━━━━\n\n` +
       `Para renovar escribe *5️⃣*\n\n` +
@@ -653,13 +674,17 @@ async function enviarQRPago(
   nombre: string,
   usuarioIPTV?: string,
   existingUserId?: number,
+  titulo?: string,
+  esActivacionDemo?: boolean,
 ): Promise<void> {
+  const tituloDefault = tipo === 'renovacion' && usuarioIPTV ? `💳 *RENOVACIÓN - ${usuarioIPTV}*` : `💳 *NUEVA CUENTA*`
+  const tituloFinal = titulo ?? tituloDefault
   // ── Modo pago manual (VeriPagos deshabilitado) ──────────────
   const veripagosOn = await isVeripagosEnabled()
   if (!veripagosOn) {
     const { readFileSync } = await import('fs')
     const planInfo = PLANES_MAP[precio]
-    const tituloManual = tipo === 'renovacion' && usuarioIPTV ? `💳 *RENOVACIÓN - ${usuarioIPTV}*` : `💳 *NUEVA CUENTA*`
+    const tituloManual = tituloFinal
     const cuerpoManual =
       `\n\n📦 Plan: *${planInfo?.duracion}*\n` +
       `📺 Dispositivos: *${planInfo?.dispositivos}*\n` +
@@ -680,6 +705,8 @@ async function enviarQRPago(
       tipo,
       usuarioIPTV,
       existingUserId,
+      titulo: tituloFinal,
+      esActivacionDemo,
       timestamp: Date.now(),
     })
     userStates.set(phoneNumber, 'esperando_comprobante')
@@ -694,7 +721,7 @@ async function enviarQRPago(
 
     if (pagoPrevio.precio === precio) {
       console.log(`♻️ Reenviando QR ${mov_id} a ${phoneNumber} (${formatarTiempoRestante(restanteMs)} restantes)`)
-      const tituloActivo = pagoPrevio.tipo === 'renovacion' && pagoPrevio.usuarioIPTV ? `💳 *RENOVACIÓN - ${pagoPrevio.usuarioIPTV}*` : `💳 *NUEVA CUENTA*`
+      const tituloActivo = pagoPrevio.titulo ?? (pagoPrevio.tipo === 'renovacion' && pagoPrevio.usuarioIPTV ? `💳 *RENOVACIÓN - ${pagoPrevio.usuarioIPTV}*` : `💳 *NUEVA CUENTA*`)
       await sendMsg(sock, from, {
         image: Buffer.from(pagoPrevio.qrBase64, 'base64'),
         caption:
@@ -725,18 +752,17 @@ async function enviarQRPago(
   }
 
   if (!qrData) {
-    await sendMsg(sock, from, { text: `⚠️ *NO SE PUDO GENERAR EL QR DE PAGO*\n\nOcurrió un problema temporal al generar el QR.\n\n⏳ Por favor intenta nuevamente más tarde.\n\n📞 Si el problema continúa, contacta soporte:\n64598912\n\n0️⃣ Volver al menú` })
+    await sendMsg(sock, from, { text: `⚠️ *NO SE PUDO GENERAR EL QR DE PAGO*\n\nOcurrió un problema temporal al generar el QR.\n\n⏳ Por favor intenta nuevamente más tarde.\n\n📞 Si el problema continúa, contacta soporte:\nhttps://wa.me/59164598912\n\n0️⃣ Volver al menú` })
     return
   }
 
   const { movimiento_id, qr } = qrData
   const generadoEn = Date.now()
 
-  const tituloQR = tipo === 'renovacion' && usuarioIPTV ? `💳 *RENOVACIÓN - ${usuarioIPTV}*` : `💳 *NUEVA CUENTA*`
   await sendMsg(sock, from, {
     image: Buffer.from(qr, 'base64'),
     caption:
-      `${tituloQR}\n\n` +
+      `${tituloFinal}\n\n` +
       `📦 Plan: *${PLANES_MAP[precio]?.duracion}*\n` +
       `📺 Dispositivos: *${PLANES_MAP[precio]?.dispositivos}*\n` +
       `💰 Total: *Bs. ${monto.toFixed(2)}*\n\n` +
@@ -753,6 +779,8 @@ async function enviarQRPago(
     nombre,
     usuarioIPTV,
     existingUserId,
+    titulo: tituloFinal,
+    esActivacionDemo,
     intentos: 0,
     fallos: 0,
     movimiento_id: String(movimiento_id),
@@ -773,7 +801,7 @@ async function getPrecioCredito(): Promise<number> {
   return cfg ? parseFloat(cfg.value) : 17
 }
 
-async function registrarTransaccion(tipo: 'nueva' | 'renovacion', precio: string, phoneNumber: string): Promise<void> {
+async function registrarTransaccion(tipo: 'nueva' | 'renovacion' | 'activacion', precio: string, phoneNumber: string): Promise<void> {
   const plan = PLANES_MAP[precio]
   if (!plan) return
   const precioCredito = await getPrecioCredito()
@@ -850,6 +878,7 @@ async function procesarCuentaNueva(
     const cuentaCreada = await prisma.user.create({ data: { nombre, usuario: iptvData.usuario, password: iptvData.password, celular: phoneNumber, plan: planCompleto, expiresAt, adultChannels: incluirAdultos } })
     iniciarPollerActivacion(iptvData.usuario, cuentaCreada.id)
     await registrarTransaccion('nueva', precio, phoneNumber)
+    await (prisma as any).demoHistory.deleteMany({ where: { celular: phoneNumber } }).catch(() => {})
 
     await enviar(jid,
       `✅ *¡CUENTA ACTIVADA!*\n\n` +
@@ -857,15 +886,16 @@ async function procesarCuentaNueva(
       `👤 Usuario: *${iptvData.usuario}*\n` +
       `🔐 Contraseña: *${iptvData.password}*\n` +
       `└───────────────\n\n` +
-      `📦 Plan: *${planCompleto}*\n` +
-      `📅 Expira: *${expiresAtDisplay}*\n\n` +
+      `📦 Plan: *${plan.duracion}${plan.bonus ? ' ' + plan.bonus : ''}*\n` +
+      `📺 Dispositivos: *${plan.dispositivos}*\n` +
+      `🗓️ Expira: *${expiresAtDisplay}*\n\n` +
       `━━━━━━━━━━━━━━━━━━\n\n` +
       `📲 Si necesitas ayuda para instalar:\n2️⃣ Guía de instalación\n\n` +
       `0️⃣ Volver al Menú`
     )
   } catch (e: any) {
     console.error('Error procesando cuenta nueva:', e.message)
-    await enviar(jid, `⚠️ *NO SE PUDO ACTIVAR LA CUENTA*\n\nTu pago fue recibido correctamente, pero ocurrió un problema temporal al crear la cuenta.\n\n📞 Por favor contacta soporte:\n64598912\n\n0️⃣ Volver al Menú`)
+    await enviar(jid, `⚠️ *NO SE PUDO ACTIVAR LA CUENTA*\n\nTu pago fue recibido correctamente, pero ocurrió un problema temporal al crear la cuenta.\n\n📞 Por favor contacta soporte:\nhttps://wa.me/59164598912\n\n0️⃣ Volver al Menú`)
   } finally {
     finalizarProcesoCritico(jid)
   }
@@ -880,6 +910,7 @@ async function procesarRenovacion(
   precio: string,
   usuarioIPTV: string,
   existingUserId: number,
+  esActivacionDemo?: boolean,
 ): Promise<void> {
   const plan = PLANES_MAP[precio]
   iniciarProcesoCritico(jid)
@@ -935,21 +966,23 @@ async function procesarRenovacion(
 
     const userRecord = await prisma.user.update({ where: { id: existingUserId }, data: updateData })
     programarRecordatorio({ ...userRecord, expiresAt })
-    await registrarTransaccion('renovacion', precio, phoneNumber)
+    await registrarTransaccion(esActivacionDemo ? 'activacion' : 'renovacion', precio, phoneNumber)
+    await (prisma as any).demoHistory.deleteMany({ where: { celular: phoneNumber } }).catch(() => {})
 
     await enviar(jid,
-      `✅ *¡CUENTA RENOVADA!*\n\n` +
+      `✅ *${esActivacionDemo ? '¡CUENTA ACTIVADA!' : '¡CUENTA RENOVADA!'}*\n\n` +
       `┌───────────────\n` +
       `👤 Usuario: *${usuarioIPTV}*\n` +
       `🔐 Contraseña: *${userRecord.password || '(ver datos anteriores)'}*\n` +
       `└───────────────\n\n` +
-      `📦 Plan: *${planCompleto}*\n` +
-      `📅 Expira: *${fechaCorta(expiresAt)}*\n\n` +
+      `📦 Plan: *${plan.duracion}${plan.bonus ? ' ' + plan.bonus : ''}*\n` +
+      `📺 Dispositivos: *${plan.dispositivos}*\n` +
+      `🗓️ Expira: *${fechaCorta(expiresAt)}*\n\n` +
       `0️⃣ Volver al Menú`
     )
   } catch (e: any) {
     console.error('Error procesando renovación:', e.message)
-    await enviar(jid, `⚠️ *NO SE PUDO RENOVAR LA CUENTA*\n\nTu pago fue recibido correctamente, pero ocurrió un problema temporal al renovar la cuenta.\n\n📞 Por favor contacta soporte:\n64598912\n\n0️⃣ Volver al Menú`)
+    await enviar(jid, `⚠️ *NO SE PUDO RENOVAR LA CUENTA*\n\nTu pago fue recibido correctamente, pero ocurrió un problema temporal al renovar la cuenta.\n\n📞 Por favor contacta soporte:\nhttps://wa.me/59164598912\n\n0️⃣ Volver al Menú`)
   } finally {
     finalizarProcesoCritico(jid)
   }
@@ -966,7 +999,7 @@ export async function aprobarPagoManual(phoneNumber: string): Promise<string> {
   if (pago.tipo === 'nueva') {
     await procesarCuentaNueva(pago.jid, pago.phoneNumber, pago.precio, pago.nombre, pago.existingUserId)
   } else {
-    await procesarRenovacion(pago.jid, pago.phoneNumber, pago.precio, pago.usuarioIPTV!, pago.existingUserId!)
+    await procesarRenovacion(pago.jid, pago.phoneNumber, pago.precio, pago.usuarioIPTV!, pago.existingUserId!, pago.esActivacionDemo)
   }
   return `✅ Pago aprobado y cuenta procesada para *${pago.nombre}* (${phoneNumber})`
 }
@@ -991,6 +1024,37 @@ export function cleanPhoneNumber(jid: string): string {
   else if (number.startsWith('549')) number = number.substring(3)  // Argentina móvil
   console.log(`🔍 Número original: ${jid} → Número limpio: ${number}`)
   return number
+}
+
+export async function sincronizarCuentaDesdePanel(usuario: string): Promise<any> {
+  const { buscarUsuarioIPTV } = await import('./iptvservice.js')
+  const panelData = await buscarUsuarioIPTV(usuario)
+
+  const match = panelData.expira?.match(/(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/)
+  const expiresAt = match ? new Date(`${match[1]}T${match[2]}:00Z`) : null
+  const precioActual = detectarPrecioDesdePanel(panelData.paquete, panelData.conexiones)
+  const planActual = PLANES_MAP[precioActual]
+  const planFormateado = planActual
+    ? (planActual.bonus
+        ? `${planActual.dispositivos} Dispositivo${planActual.dispositivos > 1 ? 's' : ''} – ${planActual.duracion} ${planActual.bonus}`
+        : `${planActual.dispositivos} Dispositivo${planActual.dispositivos > 1 ? 's' : ''} – ${planActual.duracion}`)
+    : null
+
+  const updateData: any = {}
+  if (panelData.password) updateData.password = panelData.password
+  if (planFormateado) updateData.plan = planFormateado
+  if (expiresAt) {
+    updateData.expiresAt = expiresAt
+    updateData.activated = true
+  }
+
+  const updated = await prisma.user.update({ where: { usuario }, data: updateData })
+
+  if (!expiresAt) {
+    iniciarPollerActivacion(usuario, updated.id)
+  }
+
+  return updated
 }
 
 function celularAJid(celular: string): string {
@@ -1093,7 +1157,7 @@ async function enviarComprobanteAlAdmin(
     text: `🔍 *VERIFICANDO PAGO*\n\nTu comprobante fue recibido correctamente.\n\n⏳ La verificación puede tardar algunos minutos.\n\nPor favor espera...`,
   })
   if (adminNotifyCallback) {
-    const tipoLabel = pagoManual.tipo === 'renovacion' ? '🔄 Renovación' : '🆕 Cuenta nueva'
+    const tipoLabel = (pagoManual.tipo === 'renovacion' && !pagoManual.esActivacionDemo) ? '🔄 Renovación' : '🆕 Cuenta nueva'
     const planInfo = PLANES_MAP[pagoManual.precio]
     const planDescLineas = planInfo
       ? `📦 *Plan:* ${planInfo.duracion}${planInfo.bonus ? ' ' + planInfo.bonus : ''}\n📺 *Dispositivos:* ${planInfo.dispositivos}\n💰 *Total:* Bs. ${planInfo.precio}`
@@ -1281,7 +1345,7 @@ async function _handleMessage(sock: WASocket, msg: any): Promise<void> {
         const [fd, fm, fy] = fechaStr.split('/')
         const fechaDate = new Date(parseInt(fy), parseInt(fm) - 1, parseInt(fd))
         await prisma.user.update({ where: { usuario: usuarioTarget }, data: { expiresAt: fechaDate, reminderSent: false } })
-        await sendMsg(sock, from, { text: `✅ Fecha actualizada\n\n👤 Usuario: *${usuarioTarget}*\n📅 Nueva fecha: *${fechaStr}*` }); return
+        await sendMsg(sock, from, { text: `✅ Fecha actualizada\n\n👤 Usuario: *${usuarioTarget}*\n🗓️ Nueva fecha: *${fechaStr}*` }); return
       } else if (userInput.toLowerCase().startsWith('vercliente ')) {
         const usuarioTarget = userInput.trim().split(' ')[1]
         const userTarget = await prisma.user.findUnique({ where: { usuario: usuarioTarget } })
@@ -1290,7 +1354,7 @@ async function _handleMessage(sock: WASocket, msg: any): Promise<void> {
         }
         const expiraDisplay = userTarget.expiresAt ? fechaCorta(new Date(userTarget.expiresAt)) : '-'
         await sendMsg(sock, from, {
-          text: `👤 *${userTarget.nombre}*\n📱 Celular: *${userTarget.celular}*\n🔑 Usuario: *${userTarget.usuario}*\n🔐 Password: *${userTarget.password}*\n📦 Plan: *${userTarget.plan}*\n📅 Expira: *${expiraDisplay}*`
+          text: `👤 *${userTarget.nombre}*\n📱 Celular: *${userTarget.celular}*\n🔑 Usuario: *${userTarget.usuario}*\n🔐 Password: *${userTarget.password}*\n📦 Plan: *${userTarget.plan}*\n🗓️ Expira: *${expiraDisplay}*`
         }); return
       }
     }
@@ -1366,7 +1430,7 @@ async function _handleMessage(sock: WASocket, msg: any): Promise<void> {
         userStates.delete(phoneNumber); await sendMsg(sock, from, { text: getMainMenu(existingUser, existingOfficialUsers) }); return
       } else if (isPlanPrice(userInput)) {
         if (dispositivos !== 0 && PLANES_MAP[userInput].dispositivos !== dispositivos) {
-          const fechaExp = existingUser?.expiresAt ? `\n📅 Vencimiento del plan actual:\n*${fechaCorta(new Date(existingUser.expiresAt))}*` : ''
+          const fechaExp = existingUser?.expiresAt ? `\n🗓️ Vencimiento del plan actual:\n*${fechaCorta(new Date(existingUser.expiresAt))}*` : ''
           await sendMsg(sock, from, {
             text:
               `⚠️ *Para cambiar esta cuenta a un plan con más dispositivos, es necesario esperar a que el plan actual expire o hacerlo 1 día antes del vencimiento.*` +
@@ -1561,7 +1625,7 @@ async function _handleMessage(sock: WASocket, msg: any): Promise<void> {
               `⚠️ *NO SE PUDO ACTUALIZAR EL CONTENIDO ADULTO*\n\n` +
               `Ocurrió un problema temporal al aplicar los cambios en la cuenta:\n\n` +
               `👤 *${usuarioIPTV}*\n\n` +
-              `📞 Por favor solicita el cambio al soporte:\n64598912\n\n` +
+              `📞 Por favor solicita el cambio al soporte:\nhttps://wa.me/59164598912\n\n` +
               `0️⃣ Volver al Menú`
           })
         } finally {
@@ -1622,7 +1686,7 @@ async function _handleMessage(sock: WASocket, msg: any): Promise<void> {
         if (!existingDemoUser) { await sendMsg(sock, from, { text: getMainMenu(existingUser, existingOfficialUsers) }); return }
         const nombre = existingDemoUser.nombre || existingUser?.nombre || 'Cliente'
         const plan = PLANES_MAP[userInput]
-        await enviarQRPago(sock, from, phoneNumber, plan.precio, 'renovacion', userInput, nombre, existingDemoUser.usuario, existingDemoUser.id)
+        await enviarQRPago(sock, from, phoneNumber, plan.precio, 'renovacion', userInput, nombre, existingDemoUser.usuario, existingDemoUser.id, `💳 *ACTIVACIÓN - ${existingDemoUser.usuario}*`, true)
         return
       }
       await sendMsg(sock, from, { text: `⚠️ Opción no válida. Escribe el precio del plan que deseas.\n0️⃣ Volver al menú` }); return
@@ -1696,17 +1760,27 @@ async function _handleMessage(sock: WASocket, msg: any): Promise<void> {
       if (existingOfficialUsers.length > 0) {
         await mostrarMisCuentas(sock, from, existingOfficialUsers); return
       }
-      const existingExpiredDemo = existingUsers.find(u => u.plan === 'DEMO EXPIRADA') ?? null
-      if (existingExpiredDemo && !existingDemoUser) {
-        await sendMsg(sock, from, {
-          text:
-            `ℹ️ *Tu cuenta demo ya no está disponible*\n\n` +
-            `⏱️ La demo que obtuviste ya expiró y no puede reactivarse.\n\n` +
-            `4️⃣ Suscribirme con una cuenta nueva\n` +
-            `0️⃣ Volver al menú`
-        }); return
+      const demoActiva = existingUsers.find(u => u.plan === 'DEMO 3 HORA') ?? null
+      const demoHist = await (prisma as any).demoHistory.findUnique({ where: { celular: phoneNumber } })
+      const msgDemoNoDisponible = {
+        text:
+          `ℹ️ *Tu cuenta demo ya no está disponible*\n\n` +
+          `⏱️ La demo que obtuviste ya expiró y no puede activarse.\n\n` +
+          `4️⃣ Suscribirme con una cuenta nueva\n` +
+          `0️⃣ Volver al menú`
       }
-      await handleFreeTrial(sock, from, phoneNumber, existingDemoUser); return
+      if (demoHist) {
+        if (demoHist.count >= 2) {
+          await sendMsg(sock, from, msgDemoNoDisponible); return
+        }
+        if (!demoActiva && demoHist.count === 1) {
+          const unMesAtras = new Date(); unMesAtras.setMonth(unMesAtras.getMonth() - 1)
+          if (new Date(demoHist.lastDemoAt) > unMesAtras) {
+            await sendMsg(sock, from, msgDemoNoDisponible); return
+          }
+        }
+      }
+      await handleFreeTrial(sock, from, phoneNumber, demoActiva); return
 
     } else if (userInput === '4') {
       userStates.set(phoneNumber, 'seleccionando_plan_nuevo')
@@ -1719,7 +1793,7 @@ async function _handleMessage(sock: WASocket, msg: any): Promise<void> {
             `⚠️ *NO HAY CUENTAS REGISTRADAS*\n\n` +
             `Para renovar una cuenta, primero necesitas tener una suscripción activa.\n\n` +
             `━━━━━━━━━━━━━━━━━━\n\n` +
-            `3️⃣ Prueba gratis\n4️⃣ Ver planes y suscribirme\n\n0️⃣ Volver al Menú`
+            `3️⃣ 🎁 Obtener prueba gratis\n4️⃣ 💳 Ver planes y suscribirme\n\n0️⃣ Volver al Menú`
         }); return
       }
       if (existingOfficialUsers.length === 1) {
@@ -1930,7 +2004,7 @@ async function handleRenewalWithQuickOption(sock: WASocket, from: string, phoneN
       })
     } else {
       console.error(`❌ Error inesperado buscando cuenta ${existingUser.usuario}:`, error.message)
-      await sendMsg(sock, from, { text: `⚠️ *NO SE PUDO VERIFICAR LA CUENTA*\n\nOcurrió un problema temporal al consultar la cuenta *${existingUser.usuario}*.\n\n📞 Por favor contacta soporte:\n64598912\n\n0️⃣ Volver al Menú` })
+      await sendMsg(sock, from, { text: `⚠️ *NO SE PUDO VERIFICAR LA CUENTA*\n\nOcurrió un problema temporal al consultar la cuenta *${existingUser.usuario}*.\n\n📞 Por favor contacta soporte:\nhttps://wa.me/59164598912\n\n0️⃣ Volver al Menú` })
     }
   }
 }
@@ -1983,7 +2057,7 @@ async function handleAccountSelectionForRenewal(sock: WASocket, from: string, ph
         expiraLabel = `⏳ Expira: *${fechaCorta(expiraDate)}*`
       }
     }
-    const estadoLinea = vencida ? `📅 Estado: ❌ VENCIDA\n` : ``
+    const estadoLinea = vencida ? `🗓️ Estado: ❌ VENCIDA\n` : ``
     return (
       `${sep}\n` +
       `${i + 1}️⃣ *${u.usuario}*\n` +
@@ -2016,14 +2090,20 @@ async function handleDemoCreation(sock: WASocket, from: string, phoneNumber: str
     const iptvData = await crearUsuarioIPTV('DEMO 3 HORA', incluirAdultos)
     const demoExp = new Date()
     demoExp.setHours(demoExp.getHours() + 3)
+    const ahora = new Date()
     await prisma.user.create({ data: { nombre, usuario: iptvData.usuario, password: iptvData.password, celular: phoneNumber, plan: 'DEMO 3 HORA', expiresAt: demoExp, adultChannels: incluirAdultos, activated: true } })
+    await (prisma as any).demoHistory.upsert({
+      where: { celular: phoneNumber },
+      update: { count: { increment: 1 }, lastDemoAt: ahora },
+      create: { celular: phoneNumber, count: 1, lastDemoAt: ahora },
+    })
     console.log(`🎬 DEMO CREADA | Usuario: ${iptvData.usuario} | Expira: ${demoExp.toISOString()}`)
     userStates.delete(phoneNumber)
     return `✅✅ *¡TU PRUEBA GRATIS ESTÁ LISTA!*\n\n┌───────────────\n👤 Usuario: *${iptvData.usuario}*\n🔐 Contraseña: *${iptvData.password}*\n└───────────────\n\n⏱️ La prueba gratuita tiene una duración de 3 horas y comienza cuando ingreses a la aplicación.\n\n📲 Si necesitas ayuda para instalar:\n\n2️⃣ Guía de instalación\n0️⃣ Volver al menú`
   } catch (error: any) {
     userStates.delete(phoneNumber)
     console.error('❌ Error creando demo:', error?.message ?? error)
-    return `⚠️ *NO SE PUDO CREAR LA PRUEBA GRATIS*\n\nOcurrió un problema temporal al generar tu acceso.\n\n⏳ Por favor intenta más tarde.\n\n📞 Si el problema continúa, contacta soporte:\n64598912\n\n0️⃣ Volver al menú`
+    return `⚠️ *NO SE PUDO CREAR LA PRUEBA GRATIS*\n\nOcurrió un problema temporal al generar tu acceso.\n\n⏳ Por favor intenta más tarde.\n\n📞 Si el problema continúa, contacta soporte:\nhttps://wa.me/59164598912\n\n0️⃣ Volver al menú`
   } finally {
     finalizarProcesoCritico(from)
   }
@@ -2104,7 +2184,7 @@ async function getInfoAndPrices(sock: WASocket, from: string, tieneCuenta = fals
       `⚡ Activa HOY mismo y empieza a ver al instante\n` +
       `💸 Planes accesibles y sin complicaciones\n\n` +
       `👉 Elige una opción:\n\n` +
-      `  2️⃣ Ver guía de instalación\n  3️⃣ 🎁 Solicitar prueba GRATIS\n  4️⃣ 🚀 Activar mi cuenta\n  0️⃣ Volver al menú principal`
+      `  2️⃣ Ver guía de instalación\n  3️⃣ 🎁 Obtener prueba gratis\n  4️⃣ 💳 Activar mi cuenta\n  0️⃣ Volver al menú principal`
   })
 }
 
@@ -2237,7 +2317,7 @@ async function sendCommunityInfo(sock: WASocket, from: string): Promise<void> {
 
 
 function getAdvisorContact(): string {
-  return `🛠 *SOPORTE TÉCNICO*\n\nSi presentas algún problema con el servicio:\n\n✍️ Escríbenos o envíanos una foto 📸 o video 🎥 del inconveniente.\n\n📞 Soporte: *64598912*\n\n━━━━━━━━━━━━━━━━━━\n\n0️⃣ Volver al Menú`
+  return `🛠 *SOPORTE TÉCNICO*\n\nSi presentas algún problema con el servicio:\n\n✍️ Escríbenos o envíanos una foto 📸 o video 🎥 del inconveniente.\n\n📞 Soporte: https://wa.me/59164598912\n\n━━━━━━━━━━━━━━━━━━\n\n0️⃣ Volver al Menú`
 }
 
 function getInstallationGuide(): string {
@@ -2251,9 +2331,9 @@ function estadoDesdeDate(expira: Date): string {
   const diffDias = Math.round((expiraUTC - hoyUTC) / (1000 * 60 * 60 * 24))
   const fc = fechaCorta(expira)
   if (diffDias < -1) return `⚠️ Expiró el *${fc}*`
-  if (diffDias <= 0) return `📅 Expira: *${fc}*`
+  if (diffDias <= 0) return `🗓️ Expira: *${fc}*`
   if (diffDias <= 5) return `🟡 Expira en *${diffDias} día${diffDias !== 1 ? 's' : ''}* – *${fc}*`
-  return `📅 Expira: *${fc}*`
+  return `🗓️ Expira: *${fc}*`
 }
 
 async function mostrarMisCuentas(sock: WASocket, from: string, cuentas: any[]): Promise<void> {
@@ -2261,7 +2341,7 @@ async function mostrarMisCuentas(sock: WASocket, from: string, cuentas: any[]): 
   const lineas = cuentas.map((u, i) => {
     const expira = u.expiresAt ? new Date(u.expiresAt) : null
     const vigente = expira && ahora < expira
-    const estadoLine = expira ? estadoDesdeDate(expira) : '📅 Sin fecha de expiración'
+    const estadoLine = expira ? estadoDesdeDate(expira) : '🗓️ Sin fecha de expiración'
     const icono = vigente ? '🟢' : '🔴'
     const planMatch = (u.plan || '').match(/^(\d+) Dispositivos?\s*–\s*(.+)$/)
     const planLinea = planMatch
@@ -2278,10 +2358,13 @@ async function mostrarMisCuentas(sock: WASocket, from: string, cuentas: any[]): 
     )
   }).join('\n\n')
 
-  const tieneAdultos = cuentas.some(u => u.adultChannels)
-  const labelAdultos = tieneAdultos
+  const todasConAdultos = cuentas.every(u => u.adultChannels)
+  const todasSinAdultos = cuentas.every(u => !u.adultChannels)
+  const labelAdultos = todasConAdultos
     ? `8️⃣ Desactivar canales adultos (+18)\n`
-    : `8️⃣ Activar canales adultos (+18)\n`
+    : todasSinAdultos
+      ? `8️⃣ Activar canales adultos (+18)\n`
+      : `8️⃣ Gestionar canales adultos (+18)\n`
 
   await sendMsg(sock, from, {
     text:
@@ -2298,12 +2381,12 @@ function getMainMenu(existingUser: any, existingOfficialUsers: any[] = []): stri
   if (existingOfficialUsers.length > 0) {
     return `👋 ${nombre}\n\n📋 *MENÚ MASTV*\n\n1️⃣ Información y precios\n2️⃣ Guía de instalación\n3️⃣ 📺 Mi cuenta MasTV\n6️⃣ 🌐 Comunidad\n7️⃣ 🛠 Soporte técnico\n\n👉 Responde con un número`
   }
-  return `👋 ${nombre}\n\n📋 *MENÚ MASTV*\n\n1️⃣ Ver planes y precios\n2️⃣ Guía de instalación\n3️⃣ 🎁 Prueba GRATIS por 3 horas\n4️⃣ 📺 Activar mi cuenta ahora\n6️⃣ 💼 Quiero vender MasTV\n7️⃣ 🛠 Hablar con soporte\n\n👉 Responde con un número`
+  return `👋 ${nombre}\n\n📋 *MENÚ MASTV*\n\n1️⃣ Ver planes y precios\n2️⃣ Guía de instalación\n3️⃣ 🎁 Obtener prueba gratis\n4️⃣ 💳 Activar mi cuenta ahora\n6️⃣ 💼 Quiero vender MasTV\n7️⃣ 🛠 Hablar con soporte\n\n👉 Responde con un número`
 }
 
 function bloqueCredenciales(existingUser: any, conNombre = false): string {
   if (!existingUser) {
-    return `📌 *¿No tienes cuenta todavía?*\n\n3️⃣ Prueba GRATIS\n4️⃣ Activar cuenta`
+    return `📌 *¿No tienes cuenta todavía?*\n\n3️⃣ 🎁 Obtener prueba gratis\n4️⃣ 💳 Activar cuenta`
   }
   const us = existingUser.usuario
   const pw = existingUser.password
@@ -2421,18 +2504,30 @@ async function sendInstallationGuideTVBox(sock: WASocket, from: string, existing
 }
 
 async function sendInstallationGuidePC(sock: WASocket, from: string, existingUser: any): Promise<void> {
-  try { const fs = await import('fs'); if (fs.existsSync('./recursos/pc.mp4')) { await sendMsg(sock, from, { video: fs.readFileSync('./recursos/pc.mp4') }); await new Promise(r => setTimeout(r, 1500)) } } catch {}
+  const fs = await import('fs')
+  try {
+    if (fs.existsSync('./recursos/imgpc.png')) {
+      await sendMsg(sock, from, { image: fs.readFileSync('./recursos/imgpc.png') })
+      await new Promise(r => setTimeout(r, 1500))
+    }
+  } catch {}
+  const n  = existingUser ? primerNombre(existingUser.nombre).toLowerCase() : '-'
+  const us = existingUser?.usuario   ?? '-'
+  const pw = existingUser?.password  ?? '-'
+  const bloquePc = existingUser
+    ? `┌───────────────\n🧾 Nombre: *${n}*\n👤 Usuario: *${us}*\n🔑 Contraseña: *${pw}*\n🌐 URL: *http://mtv.bo:80*\n└───────────────`
+    : `📌 *¿No tienes cuenta todavía?*\n\n3️⃣ 🎁 Obtener prueba gratis\n4️⃣ 💳 Activar cuenta`
   await sendMsg(sock, from, {
     text:
       `💻 *INSTALACIÓN EN PC / LAPTOP*\n\n` +
       `Descarga la aplicación 👇\n\n` +
-      `🔹 *FULLTVMAS*\n` +
-      `👉 https://bit.ly/mastvpc\n\n` +
+      `🔹 *IPTV STREAM PLAY*\n` +
+      `👉 https://bit.ly/isp-pc\n\n` +
       `━━━━━━━━━━━━━━━━━━\n\n` +
       `📲 *Luego de instalar:*\n\n` +
       `✅ Abre la aplicación\n` +
       `✅ Ingresa tus datos:\n\n` +
-      `${bloqueCredenciales(existingUser, true)}\n\n` +
+      `${bloquePc}\n\n` +
       `0️⃣ Volver al menú`
   })
 }
@@ -2453,6 +2548,15 @@ const PLANES_MAP: { [key: string]: { dispositivos: number, duracion: string, pre
   '115': { dispositivos: 3, duracion: '3 Meses',  precio: 115, creditos: 3    },
   '225': { dispositivos: 3, duracion: '6 Meses',  precio: 225, creditos: 6,   bonus: '+ 1 Mes 🎁' },
   '440': { dispositivos: 3, duracion: '12 Meses', precio: 440, creditos: 12,  bonus: '+ 2 Meses 🎁' },
+}
+
+export function planPanelAFormato(paquete: string, conexiones: string): string | null {
+  const precio = detectarPrecioDesdePanel(paquete, conexiones)
+  const plan = PLANES_MAP[precio]
+  if (!plan) return null
+  return plan.bonus
+    ? `${plan.dispositivos} Dispositivo${plan.dispositivos > 1 ? 's' : ''} – ${plan.duracion} ${plan.bonus}`
+    : `${plan.dispositivos} Dispositivo${plan.dispositivos > 1 ? 's' : ''} – ${plan.duracion}`
 }
 
 //este arvchivo es messageHandler.ts
