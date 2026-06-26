@@ -19,7 +19,12 @@ let activePanelIndex = 0
 // ===============================
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-const PANEL_CREDENTIALS = { username: 'zandrotja', password: 'leon1234' }
+let PANEL_CREDENTIALS = { username: 'zandrotjarg', password: 'leon1234' }
+
+export function setPanelCredentials(username: string, password: string): void {
+  PANEL_CREDENTIALS = { username, password }
+  console.log(`🔧 Credenciales del panel actualizadas: ${username}`)
+}
 
 async function navegarConLogin(page: Page, path: string): Promise<void> {
   const intentar = async (baseIndex: number): Promise<void> => {
@@ -53,12 +58,12 @@ async function navegarConLogin(page: Page, path: string): Promise<void> {
 }
 
 function generarUsuario(): string {
-  const l = 'abcdefghijklmnopqrstuvwxyz'
+  const l = 'abcdefghijkmnopqrstuvwxyz'
   const n = '0123456789'
   return (
-    l[Math.floor(Math.random() * 26)] +
-    l[Math.floor(Math.random() * 26)] +
-    l[Math.floor(Math.random() * 26)] +
+    l[Math.floor(Math.random() * 25)] +
+    l[Math.floor(Math.random() * 25)] +
+    l[Math.floor(Math.random() * 25)] +
     n[Math.floor(Math.random() * 10)] +
     n[Math.floor(Math.random() * 10)] +
     n[Math.floor(Math.random() * 10)]
@@ -173,7 +178,7 @@ async function extraerDatosFila(page: Page, usuario: string): Promise<{
 
   console.log('✅ Datos extraídos:')
   console.log('  👤 Usuario:', data.usuario)
-  console.log('  🔐 Password:', data.password)
+  console.log('  🔐 Password:', '***')
   console.log('  📅 Expira:', data.expira)
   console.log('  📦 Paquete:', data.paquete)
 
@@ -400,7 +405,7 @@ export async function buscarUsuarioIPTV(usuario: string): Promise<{
     if (!data) throw new Error(`No se encontró el usuario: ${usuario}`)
 
     console.log(`━━━━━━ CUENTA ENCONTRADA: ${data.usuario} ━━━━━━`)
-    console.log(`  🔐 Password:   ${data.password}`)
+    console.log(`  🔐 Password:   ***`)
     console.log(`  📅 Expira:     ${data.expira}`)
     console.log(`  📦 Paquete:    ${data.paquete}`)
     console.log(`  👤 Reseller:   ${data.reseller}`)

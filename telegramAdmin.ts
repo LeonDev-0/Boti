@@ -6,22 +6,38 @@ import {
   setAdminNotifyCallback, getPagosManualPendientes,
   iniciarPollerActivacion, cleanPhoneNumber, planPanelAFormato, sincronizarCuentaDesdePanel,
   setBotPausado, isBotPausado,
+  registrarTransaccionDesdePanel,
 } from './messageHandler.js'
-import { leerCreditosPanel } from './iptvservice.js'
+import { leerCreditosPanel, setPanelCredentials } from './iptvservice.js'
 
 console.log('📦 telegramAdmin.ts: módulo cargado')
 
-const TOKEN    = '8673050602:AAFuGN6e_JbRV_MRJ-mq2NfZ1RWZE1ftGBE'
-const ADMIN_ID = 1194525126
+const TOKEN    = process.env.TELEGRAM_TOKEN    ?? (() => { throw new Error('TELEGRAM_TOKEN no configurado en .env') })()
+const ADMIN_ID = parseInt(process.env.TELEGRAM_ADMIN_ID ?? '0') || (() => { throw new Error('TELEGRAM_ADMIN_ID no configurado en .env') })()
 const API_URL  = `https://api.telegram.org/bot${TOKEN}`
 
 let running = false
 
 // ── Callbacks desde boti.ts ────────────────────────────────
 let resetSessionCallback: (() => Promise<void>) | null = null
+let iniciarWACallback: (() => void) | null = null
+let cancelarWACallback: (() => Promise<void>) | null = null
+let waStatus: 'desconectado' | 'conectando' | 'conectado' = 'desconectado'
 
 export function setResetSessionCallback(fn: () => Promise<void>): void {
   resetSessionCallback = fn
+}
+
+export function setIniciarWACallback(fn: () => void): void {
+  iniciarWACallback = fn
+}
+
+export function setCancelarWACallback(fn: () => Promise<void>): void {
+  cancelarWACallback = fn
+}
+
+export function setWAStatus(status: 'desconectado' | 'conectando' | 'conectado'): void {
+  waStatus = status
 }
 
 export async function notifyQrCode(buffer: Buffer): Promise<void> {
@@ -35,10 +51,24 @@ export async function notifyQrCode(buffer: Buffer): Promise<void> {
 }
 
 export async function notifyBotConectado(numero: string): Promise<void> {
+  waStatus = 'conectado'
   try {
     await send(ADMIN_ID, `✅ *Bot conectado correctamente*\n\n📱 Número activo: *+${numero}*`)
   } catch (e: any) {
     console.error('❌ Error notificando conexión a Telegram:', e.message)
+  }
+}
+
+export async function notifyWAEsperando(): Promise<void> {
+  try {
+    await send(ADMIN_ID,
+      `⚠️ *WhatsApp no vinculado*\n\n` +
+      `El bot está activo pero no hay número vinculado.\n\n` +
+      `Ve a ⚙️ *Configuración* y presiona *🔗 Conectar WhatsApp* para escanear el QR.`,
+      getMenuKb()
+    )
+  } catch (e: any) {
+    console.error('❌ Error notificando WA no vinculado:', e.message)
   }
 }
 
@@ -141,15 +171,22 @@ function getMenuKb() {
 }
 function getConfigKb() {
   const pausado = isBotPausado()
+  const waRow: KbRow =
+    waStatus === 'conectado'   ? [{ text: '📱 Cambiar número',            cb: 'cambiar_numero' }] :
+    waStatus === 'conectando'  ? [{ text: '❌ Cancelar vinculación',      cb: 'cancelar_wa'    }] :
+                                 [{ text: '🔗 Conectar WhatsApp',          cb: 'iniciar_wa'     }]
   return kb([
     [{ text: '🎬 Demos', cb: 'demos_menu' }, { text: '💲 VeriPagos', cb: 'vp_menu' }],
-    [{ text: '📱 Cambiar número', cb: 'cambiar_numero' }],
+    waRow,
     [{ text: pausado ? '▶️ Reanudar bot' : '⏸️ Pausar bot', cb: 'toggle_pausa' }],
+    [{ text: '🔧 Panel IPTV', cb: 'panel_iptv' }],
+    [{ text: '🗑️ Reinicio de año', cb: 'reinicio_anio' }],
     [{ text: '⬅️ Menú', cb: 'menu' }],
   ])
 }
 const FINANZAS_MENU_KB = kb([
   [{ text: '📊 Estadísticas', cb: 'stats' }, { text: '💰 Finanzas', cb: 'finanzas' }],
+  [{ text: '💸 Devolución', cb: 'devolucion' }],
   [{ text: '⬅️ Menú', cb: 'menu' }],
 ])
 const BACK_KB = kb([[{ text: '⬅️ Menú', cb: 'menu' }]])
@@ -187,11 +224,12 @@ async function handleStats(chatId: number, msgId: number): Promise<void> {
     isVeripagosEnabled(),
   ])
 
-  const renovaciones = txTotal.filter((t: any) => t.tipo === 'renovacion').length
-  const ingresos     = txTotal.reduce((s: number, t: any) => s + t.precio, 0)
-  const costos       = txTotal.reduce((s: number, t: any) => s + t.costo, 0)
-  const ganancia     = txTotal.reduce((s: number, t: any) => s + t.ganancia, 0)
-  const creditos     = txTotal.reduce((s: number, t: any) => s + t.creditos, 0)
+  const r = resumirTxs(txTotal)
+  const renovaciones = r.renov
+  const ingresos     = r.ingresos - r.montoDev
+  const costos       = r.costo
+  const ganancia     = r.ganancia
+  const creditos     = r.creditos
   const diasOperando = primeraFecha
     ? Math.floor((ahora.getTime() - new Date(primeraFecha.fecha).getTime()) / 86400000)
     : 0
@@ -207,7 +245,8 @@ async function handleStats(chatId: number, msgId: number): Promise<void> {
     `🔄 Renovaciones realizadas: *${renovaciones}*\n` +
     `🎁 Demos generadas: *${demosCount}*\n\n` +
     `💵 Ingresos históricos: *Bs. ${f2(ingresos)}*\n` +
-    `💸 Costos operativos: *Bs. ${f2(costos)}*\n` +
+    (r.devoluciones > 0 ? `💸 Devoluciones: *${r.devoluciones}* (−Bs. ${f2(r.montoDev)})\n` : '') +
+    `⚙️ Costos operativos: *Bs. ${f2(costos)}*\n` +
     `✅ Ganancia neta: *Bs. ${f2(ganancia)}*\n\n` +
     `📆 Tiempo operando: *${diasOperando} días*\n` +
     `🪙 Créditos consumidos: *${f2(creditos)}*\n` +
@@ -389,67 +428,162 @@ async function getPrecioCredito(): Promise<number> {
 const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
 function resumirTxs(txs: any[]) {
-  const nuevasTx    = txs.filter((t: any) => t.tipo === 'nueva')
-  const renovTx     = txs.filter((t: any) => t.tipo === 'renovacion')
-  const activTx     = txs.filter((t: any) => t.tipo === 'activacion')
+  const nuevasTx  = txs.filter((t: any) => t.tipo === 'nueva')
+  const renovTx   = txs.filter((t: any) => t.tipo === 'renovacion')
+  const activTx   = txs.filter((t: any) => t.tipo === 'activacion')
+  const devTx     = txs.filter((t: any) => t.tipo === 'devolucion')
+  const ventasTx  = txs.filter((t: any) => t.tipo !== 'devolucion')
+  const montoDev    = devTx.reduce((s: number, t: any) => s + t.precio, 0)
+  const creditosDev = devTx.reduce((s: number, t: any) => s + t.creditos, 0)
+  const costoDev    = devTx.reduce((s: number, t: any) => s + t.costo, 0)
   return {
-    nuevas:          nuevasTx.length,
-    renov:           renovTx.length,
-    activ:           activTx.length,
-    ingresosNuevas:  nuevasTx.reduce((s: number, t: any) => s + t.precio, 0),
-    ingresosRenov:   renovTx.reduce((s: number, t: any)  => s + t.precio, 0),
-    ingresosActiv:   activTx.reduce((s: number, t: any)  => s + t.precio, 0),
-    ingresos:        txs.reduce((s: number, t: any) => s + t.precio, 0),
-    creditos:        txs.reduce((s: number, t: any) => s + t.creditos, 0),
-    costo:           txs.reduce((s: number, t: any) => s + t.costo, 0),
-    ganancia:        txs.reduce((s: number, t: any) => s + t.ganancia, 0),
+    nuevas:         nuevasTx.length,
+    renov:          renovTx.length,
+    activ:          activTx.length,
+    devoluciones:   devTx.length,
+    ingresosNuevas: nuevasTx.reduce((s: number, t: any) => s + t.precio, 0),
+    ingresosRenov:  renovTx.reduce((s: number, t: any)  => s + t.precio, 0),
+    ingresosActiv:  activTx.reduce((s: number, t: any)  => s + t.precio, 0),
+    montoDev,
+    creditosDev,
+    costoDev,
+    ingresos:       ventasTx.reduce((s: number, t: any) => s + t.precio, 0),
+    creditos:       ventasTx.reduce((s: number, t: any) => s + t.creditos, 0) - creditosDev,
+    costo:          ventasTx.reduce((s: number, t: any) => s + t.costo, 0) - costoDev,
+    // ganancia: perdemos el precio devuelto pero recuperamos el costo de créditos
+    ganancia:       ventasTx.reduce((s: number, t: any) => s + t.ganancia, 0) - (montoDev - costoDev),
   }
 }
 
 function bloqueFinanzas(titulo: string, r: ReturnType<typeof resumirTxs>, f2: (n: number) => string): string {
-  const lineasMedio = [
-    `├ 🆕 ${r.nuevas} nuevas: Bs. ${f2(r.ingresosNuevas)}`,
-    `├ 🔄 ${r.renov} renov.: Bs. ${f2(r.ingresosRenov)}`,
-    ...(r.activ > 0 ? [`├ ✨ ${r.activ} activ. demo: Bs. ${f2(r.ingresosActiv)}`] : []),
-  ]
+  const nuevasNetas = Math.max(0, r.nuevas + r.activ - r.devoluciones)
+  const ingresosNuevasNetos = Math.max(0, r.ingresosNuevas + r.ingresosActiv - r.montoDev)
   return (
     `${titulo}\n` +
-    lineasMedio.join('\n') + '\n' +
-    `├ 💵 Total ingresos: *Bs. ${f2(r.ingresos)}*\n` +
-    `├ 🪙 Créditos usados: ${f2(r.creditos)}\n` +
+    `├ 🆕 ${nuevasNetas} nuevas: Bs. ${f2(ingresosNuevasNetos)}\n` +
+    `├ 🔄 ${r.renov} renov.: Bs. ${f2(r.ingresosRenov)}\n` +
+    `├ 💵 Ingresos netos: *Bs. ${f2(r.ingresos - r.montoDev)}*\n` +
+    `├ 🪙 Créditos: ${f2(r.creditos)} = *Bs. ${f2(r.costo)}*\n` +
     `└ ✅ Ganancia: *Bs. ${f2(r.ganancia)}*`
+  )
+}
+
+async function handleHistorialMensual(chatId: number, msgId: number, offset: number): Promise<void> {
+  const todas = await (prisma as any).transaccion.findMany({ orderBy: { fecha: 'desc' } })
+  const porMes = new Map<string, any[]>()
+  for (const tx of todas) {
+    const d = new Date(tx.fecha)
+    const clave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    if (!porMes.has(clave)) porMes.set(clave, [])
+    porMes.get(clave)!.push(tx)
+  }
+  const meses = Array.from(porMes.entries()).sort((a, b) => b[0].localeCompare(a[0]))
+  if (meses.length === 0) {
+    await edit(chatId, msgId, '📅 No hay transacciones registradas.', kb([[{ text: '⬅️ Volver', cb: 'finanzas_menu' }]])); return
+  }
+  const POR_PAG = 4
+  const pagina  = meses.slice(offset, offset + POR_PAG)
+  const f2 = (n: number) => n.toFixed(2)
+  const texto = pagina.map(([clave, txs]) => {
+    const [anio, mes] = clave.split('-')
+    const r = resumirTxs(txs)
+    const totalNuevas = r.nuevas + r.activ
+    return (
+      `📆 *${MESES_ES[parseInt(mes) - 1].toUpperCase()} ${anio}*\n` +
+      `├ 🆕 ${totalNuevas} nuevas  🔄 ${r.renov} renov.\n` +
+      `├ 💵 Bs. ${f2(r.ingresos - r.montoDev)}\n` +
+      `└ ✅ Ganancia: Bs. ${f2(r.ganancia)}`
+    )
+  }).join('\n\n')
+  const navRow: KbRow = []
+  if (offset > 0) navRow.push({ text: '⬅️ Más recientes', cb: `historial_${offset - POR_PAG}` })
+  if (offset + POR_PAG < meses.length) navRow.push({ text: 'Más antiguos ➡️', cb: `historial_${offset + POR_PAG}` })
+  const rows: KbRow[] = []
+  if (navRow.length) rows.push(navRow)
+  rows.push([{ text: '⬅️ Volver', cb: 'finanzas_menu' }])
+  await edit(chatId, msgId, `📅 *HISTORIAL MENSUAL*\n\n${texto}`, kb(rows))
+}
+
+async function handleDevolucionBuscar(chatId: number, msgId: number): Promise<void> {
+  pendingAction.set(ADMIN_ID, { type: 'devolucion_buscar' })
+  await edit(chatId, msgId,
+    `💸 *REGISTRAR DEVOLUCIÓN*\n\nEscribe el *usuario IPTV* o *número de celular* del cliente:`,
+    kb([[{ text: '❌ Cancelar', cb: 'finanzas_menu' }]])
   )
 }
 
 async function handleFinanzas(chatId: number, msgId: number): Promise<void> {
   const ahora = new Date()
   const inicioDia = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate())
-  const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1)
-
-  const [txHoy, txMes, txTotal, precioCredito] = await Promise.all([
+  const [txHoy, precioCredito] = await Promise.all([
     (prisma as any).transaccion.findMany({ where: { fecha: { gte: inicioDia } } }),
-    (prisma as any).transaccion.findMany({ where: { fecha: { gte: inicioMes } } }),
-    (prisma as any).transaccion.findMany({}),
     getPrecioCredito(),
   ])
-
-  const hoy   = resumirTxs(txHoy)
-  const mes   = resumirTxs(txMes)
-  const total = resumirTxs(txTotal)
+  const hoy = resumirTxs(txHoy)
   const f2 = (n: number) => n.toFixed(2)
-
   await edit(chatId, msgId,
     `💰 *FINANZAS MASTV*\n\n` +
     bloqueFinanzas(`📅 *HOY*`, hoy, f2) + `\n\n` +
-    bloqueFinanzas(`📆 *${MESES_ES[ahora.getMonth()].toUpperCase()} ${ahora.getFullYear()}*`, mes, f2) + `\n\n` +
-    bloqueFinanzas(`🏆 *TOTAL ACUMULADO*`, total, f2) + `\n\n` +
     `⚙️ Precio crédito: *Bs. ${precioCredito}*`,
     kb([
-      [{ text: '🔄 Actualizar', cb: 'finanzas' }, { text: '⚙️ Cambiar precio crédito', cb: 'fin_precio' }],
+      [{ text: '📆 Ver por mes', cb: 'fin_meses_0' }],
+      [{ text: '🔄 Actualizar', cb: 'finanzas' }, { text: '⚙️ Precio crédito', cb: 'fin_precio' }],
       [{ text: '⬅️ Volver', cb: 'finanzas_menu' }],
     ])
   )
 }
+
+async function handleFinanzasMeses(chatId: number, msgId: number, offset: number): Promise<void> {
+  const todas = await (prisma as any).transaccion.findMany({ orderBy: { fecha: 'desc' } })
+  const claves = new Map<string, boolean>()
+  for (const tx of todas) {
+    const d = new Date(tx.fecha)
+    claves.set(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, true)
+  }
+  const meses = Array.from(claves.keys()).sort((a, b) => b.localeCompare(a))
+  if (meses.length === 0) {
+    await edit(chatId, msgId, '📆 No hay transacciones registradas.', kb([[{ text: '⬅️ Volver', cb: 'finanzas' }]])); return
+  }
+  const POR_PAG = 8
+  const pagina = meses.slice(offset, offset + POR_PAG)
+  const mesRows: KbRow[] = []
+  for (let i = 0; i < pagina.length; i += 2) {
+    const row: KbRow = []
+    const [a1, m1] = pagina[i].split('-')
+    row.push({ text: `${MESES_ES[parseInt(m1) - 1]} ${a1}`, cb: `fin_mes_${pagina[i]}` })
+    if (i + 1 < pagina.length) {
+      const [a2, m2] = pagina[i + 1].split('-')
+      row.push({ text: `${MESES_ES[parseInt(m2) - 1]} ${a2}`, cb: `fin_mes_${pagina[i + 1]}` })
+    }
+    mesRows.push(row)
+  }
+  const navRow: KbRow = []
+  if (offset > 0) navRow.push({ text: '⬅️ Más recientes', cb: `fin_meses_${offset - POR_PAG}` })
+  if (offset + POR_PAG < meses.length) navRow.push({ text: 'Más antiguos ➡️', cb: `fin_meses_${offset + POR_PAG}` })
+  const rows: KbRow[] = [...mesRows]
+  if (navRow.length) rows.push(navRow)
+  rows.push([{ text: '⬅️ Volver', cb: 'finanzas' }])
+  await edit(chatId, msgId, `📆 *Selecciona un mes:*`, kb(rows))
+}
+
+async function handleFinanzasMes(chatId: number, msgId: number, clave: string): Promise<void> {
+  const [anioStr, mesStr] = clave.split('-')
+  const anio = parseInt(anioStr)
+  const mes  = parseInt(mesStr) - 1
+  const inicio = new Date(anio, mes, 1)
+  const fin    = new Date(anio, mes + 1, 1)
+  const txs = await (prisma as any).transaccion.findMany({ where: { fecha: { gte: inicio, lt: fin } } })
+  const r = resumirTxs(txs)
+  const f2 = (n: number) => n.toFixed(2)
+  await edit(chatId, msgId,
+    `💰 *FINANZAS MASTV*\n\n` +
+    bloqueFinanzas(`📆 *${MESES_ES[mes].toUpperCase()} ${anio}*`, r, f2),
+    kb([
+      [{ text: '📆 Otros meses', cb: 'fin_meses_0' }, { text: '⬅️ Volver', cb: 'finanzas' }],
+    ])
+  )
+}
+
 
 async function leerYGuardarCreditosInicio(): Promise<number | null> {
   const ahora = new Date()
@@ -562,12 +696,20 @@ async function enviarResumenMensual(anio: number, mes: number): Promise<void> {
 }
 
 function iniciarSchedulerMensual(): void {
+  const MAX_TIMEOUT_MS = 2147483647
+
   function programarSiguiente(): void {
     const ahora = new Date()
     // Dispara a las 00:05 del día 1 del mes siguiente
     const siguiente = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1, 0, 5, 0)
     const msHasta = siguiente.getTime() - ahora.getTime()
     console.log(`📅 Resumen mensual programado para: ${siguiente.toLocaleString('es-BO')} (en ${Math.round(msHasta / 3600000)} h)`)
+
+    // Si el delay supera el límite de 32 bits de Node.js, re-programar en tramos
+    if (msHasta > MAX_TIMEOUT_MS) {
+      setTimeout(() => programarSiguiente(), MAX_TIMEOUT_MS)
+      return
+    }
 
     setTimeout(async () => {
       // Enviar resumen del mes que acaba de terminar
@@ -584,17 +726,42 @@ function iniciarSchedulerMensual(): void {
   programarSiguiente()
 }
 
+async function cargarCredencialesPanel(): Promise<void> {
+  const [cfgUser, cfgPass] = await Promise.all([
+    prisma.config.findUnique({ where: { key: 'panel_usuario' } }),
+    prisma.config.findUnique({ where: { key: 'panel_password' } }),
+  ])
+  if (cfgUser?.value && cfgPass?.value) {
+    setPanelCredentials(cfgUser.value, cfgPass.value)
+    console.log(`🔧 Credenciales del panel cargadas desde DB: ${cfgUser.value}`)
+  }
+}
+
+async function handlePanelIptv(chatId: number, msgId: number): Promise<void> {
+  const cfgUser = await prisma.config.findUnique({ where: { key: 'panel_usuario' } })
+  const usuario = cfgUser?.value ?? '(predeterminado)'
+  await edit(chatId, msgId,
+    `🔧 *Panel IPTV*\n\n` +
+    `👤 Usuario: \`${usuario}\`\n` +
+    `🔑 Contraseña: ••••••••`,
+    kb([
+      [{ text: '✏️ Cambiar usuario', cb: 'panel_usuario' }, { text: '🔑 Cambiar contraseña', cb: 'panel_password' }],
+      [{ text: '⬅️ Volver', cb: 'config_menu' }],
+    ])
+  )
+}
+
 async function handleDeleteConfirm(chatId: number, msgId: number, usuario: string): Promise<void> {
   const user = await prisma.user.findUnique({ where: { usuario } })
   if (!user) {
     await send(chatId, `❌ No se encontró el usuario *${usuario}*`, BACK_KB); return
   }
   await send(chatId,
-    `🗑️ *¿Eliminar usuario?*\n\n` +
+    `🗑️ *¿Eliminar cuenta?*\n\n` +
     `👤 *${user.nombre}*\n` +
     `🔑 Usuario: \`${user.usuario}\`\n` +
     `📦 Plan: ${user.plan || '-'}\n\n` +
-    `⚠️ Esta acción *no se puede deshacer*.`,
+    `⚠️ Se eliminará la cuenta y se revertirá la transacción en finanzas.`,
     kb([
       [{ text: '✅ Sí, eliminar', cb: `del_ok_${usuario}` }, { text: '❌ Cancelar', cb: 'menu' }],
     ])
@@ -605,12 +772,95 @@ async function handleDeleteConfirm(chatId: number, msgId: number, usuario: strin
 async function handleCallback(cbId: string, chatId: number, msgId: number, data: string): Promise<void> {
   await answerCb(cbId)
 
+  if (data === 'cancelar_wa') {
+    if (!cancelarWACallback) {
+      await edit(chatId, msgId, '❌ No se puede cancelar en este momento.', getConfigKb()); return
+    }
+    waStatus = 'desconectado'
+    await edit(chatId, msgId,
+      `🛑 *Vinculación cancelada*\n\nEl proceso de conexión fue detenido.\n\nPresioná *🔗 Conectar WhatsApp* cuando quieras intentar nuevamente.`,
+      getConfigKb()
+    )
+    await cancelarWACallback()
+    return
+  }
+
+  if (data === 'iniciar_wa') {
+    if (!iniciarWACallback) {
+      await edit(chatId, msgId, '❌ El bot no está listo para iniciar WhatsApp.', getConfigKb()); return
+    }
+    if (waStatus === 'conectado') {
+      await edit(chatId, msgId, '✅ WhatsApp ya está conectado.', getConfigKb()); return
+    }
+    if (waStatus === 'conectando') {
+      await edit(chatId, msgId, '⏳ Ya se está conectando, esperá el QR...', getConfigKb()); return
+    }
+    waStatus = 'conectando'
+    await edit(chatId, msgId,
+      `⏳ *Iniciando conexión con WhatsApp...*\n\nEn unos segundos recibirás el QR para escanear con tu celular.\n\n📲 Abrí WhatsApp → *Dispositivos vinculados* → *Vincular dispositivo*`,
+      kb([[{ text: '⬅️ Volver', cb: 'config_menu' }]])
+    )
+    iniciarWACallback()
+    return
+  }
+
   if (data === 'menu') { await showMenu(chatId, msgId); return }
   if (data === 'config_menu') {
     await edit(chatId, msgId, `⚙️ *Configuración*\n\nSelecciona una opción:`, getConfigKb()); return
   }
   if (data === 'finanzas_menu') {
     await edit(chatId, msgId, `📈 *Finanzas*\n\nSelecciona una opción:`, FINANZAS_MENU_KB); return
+  }
+  if (data.startsWith('fin_meses_')) {
+    const offset = parseInt(data.replace('fin_meses_', '')) || 0
+    await handleFinanzasMeses(chatId, msgId, offset); return
+  }
+  if (data.startsWith('fin_mes_')) {
+    const clave = data.replace('fin_mes_', '')
+    await handleFinanzasMes(chatId, msgId, clave); return
+  }
+  if (data === 'panel_iptv') { await handlePanelIptv(chatId, msgId); return }
+  if (data === 'panel_usuario') {
+    pendingAction.set(ADMIN_ID, { type: 'nuevo_panel_usuario' })
+    await send(chatId, `✏️ *Cambiar usuario del panel*\n\nEscribe el nuevo nombre de usuario:`, kb([[{ text: '❌ Cancelar', cb: 'panel_iptv' }]]))
+    return
+  }
+  if (data === 'panel_password') {
+    pendingAction.set(ADMIN_ID, { type: 'nuevo_panel_password' })
+    await send(chatId, `🔑 *Cambiar contraseña del panel*\n\nEscribe la nueva contraseña:`, kb([[{ text: '❌ Cancelar', cb: 'panel_iptv' }]]))
+    return
+  }
+  if (data === 'devolucion') { await handleDevolucionBuscar(chatId, msgId); return }
+  if (data.startsWith('dev_ok_')) {
+    const usuario = data.replace('dev_ok_', '')
+    const user = await prisma.user.findUnique({ where: { usuario } })
+    const ultimaTx = await (prisma as any).transaccion.findFirst({
+      where: { phoneNumber: user?.celular, tipo: { not: 'devolucion' } },
+      orderBy: { fecha: 'desc' },
+    })
+    const monto             = ultimaTx?.precio   ?? 0
+    const creditosRetornados = ultimaTx?.creditos ?? 0
+    const costoRetornado    = ultimaTx?.costo     ?? 0
+    await (prisma as any).transaccion.create({
+      data: { tipo: 'devolucion', plan: 'Devolución', precio: monto, creditos: creditosRetornados, costo: costoRetornado, ganancia: 0, phoneNumber: user?.celular ?? '' }
+    })
+    await prisma.user.deleteMany({ where: { usuario } })
+    await edit(chatId, msgId,
+      `✅ *Devolución registrada*\n\n` +
+      `👤 *${user?.nombre ?? usuario}*\n` +
+      `💸 Monto devuelto: *Bs. ${monto.toFixed(2)}*\n` +
+      `🪙 Créditos retornados: *${creditosRetornados.toFixed(2)}*\n` +
+      `🗑️ Cuenta eliminada de la base de datos.`,
+      kb([[{ text: '⬅️ Finanzas', cb: 'finanzas_menu' }]])
+    ); return
+  }
+  if (data.startsWith('dev_monto_')) {
+    const usuario = data.replace('dev_monto_', '')
+    pendingAction.set(ADMIN_ID, { type: 'devolucion_monto', usuarioTarget: usuario })
+    await edit(chatId, msgId,
+      `✏️ *MONTO PERSONALIZADO*\n\nEscribe el monto a devolver en Bs. para *${usuario}*:`,
+      kb([[{ text: '❌ Cancelar', cb: 'finanzas_menu' }]])
+    ); return
   }
   if (data === 'stats') { await handleStats(chatId, msgId); return }
   if (data === 'pagos') { await handlePagos(chatId, msgId); return }
@@ -695,9 +945,21 @@ async function handleCallback(cbId: string, chatId: number, msgId: number, data:
     const usuario = data.replace('del_ok_', '')
     try {
       const user = await prisma.user.findUnique({ where: { usuario } })
-      await prisma.user.delete({ where: { usuario } })
+      const ultimaTx = await (prisma as any).transaccion.findFirst({
+        where: { phoneNumber: user?.celular, tipo: { not: 'devolucion' } },
+        orderBy: { fecha: 'desc' },
+      })
+      if (ultimaTx) {
+        await (prisma as any).transaccion.create({
+          data: { tipo: 'devolucion', plan: 'Reversal - cuenta eliminada', precio: ultimaTx.precio, creditos: ultimaTx.creditos, costo: ultimaTx.costo, ganancia: 0, phoneNumber: user?.celular ?? '' }
+        })
+      }
+      await prisma.user.deleteMany({ where: { usuario } })
       await edit(chatId, msgId,
-        `✅ *Usuario eliminado*\n\n👤 ${user?.nombre || usuario}\n🔑 \`${usuario}\``,
+        `✅ *Cuenta eliminada*\n\n` +
+        `👤 ${user?.nombre || usuario}\n` +
+        `🔑 \`${usuario}\`\n\n` +
+        `↩️ Transacción revertida en finanzas.`,
         BACK_KB
       )
     } catch {
@@ -708,6 +970,39 @@ async function handleCallback(cbId: string, chatId: number, msgId: number, data:
   if (data.startsWith('del_') && !data.startsWith('del_ok_')) {
     const usuario = data.replace('del_', '')
     await handleDeleteConfirm(chatId, msgId, usuario); return
+  }
+  if (data === 'reinicio_anio') {
+    const total = await (prisma as any).transaccion.count()
+    await edit(chatId, msgId,
+      `🗑️ *REINICIO DE AÑO*\n\n` +
+      `Esto eliminará *todos* los registros de finanzas (*${total}* transacciones).\n\n` +
+      `Las cuentas de clientes *no* se verán afectadas.\n\n` +
+      `⚠️ Esta acción es *irreversible*. ¿Estás seguro?`,
+      kb([
+        [{ text: '⚠️ Sí, confirmar reinicio', cb: 'reinicio_anio_confirm' }],
+        [{ text: '❌ Cancelar', cb: 'config_menu' }],
+      ])
+    ); return
+  }
+  if (data === 'reinicio_anio_confirm') {
+    await edit(chatId, msgId,
+      `🗑️ *ÚLTIMA CONFIRMACIÓN*\n\n` +
+      `¿Seguro que deseas borrar *TODOS* los registros de finanzas?\n\n` +
+      `No hay vuelta atrás.`,
+      kb([
+        [{ text: '🗑️ SÍ, BORRAR TODO', cb: 'reinicio_anio_ok' }],
+        [{ text: '❌ Cancelar', cb: 'config_menu' }],
+      ])
+    ); return
+  }
+  if (data === 'reinicio_anio_ok') {
+    const { count } = await (prisma as any).transaccion.deleteMany()
+    await edit(chatId, msgId,
+      `✅ *Reinicio completado*\n\n` +
+      `🗑️ Se eliminaron *${count}* transacciones.\n\n` +
+      `Los registros de finanzas empiezan desde cero.`,
+      kb([[{ text: '⬅️ Configuración', cb: 'config_menu' }]])
+    ); return
   }
   if (data === 'finanzas') { await handleFinanzas(chatId, msgId); return }
   if (data === 'toggle_pausa') {
@@ -933,6 +1228,7 @@ async function handleText(chatId: number, userId: number, text: string): Promise
         create: { nombre, usuario: usuarioIPTV, password: panelData.password, celular, plan: planFormateado, expiresAt, activated, adultChannels: true },
       })
       if (!activated) iniciarPollerActivacion(usuarioIPTV, registro.id)
+      const txRegistrada = await registrarTransaccionDesdePanel(panelData.paquete, panelData.conexiones, celular)
       const fechaStr = activated ? expiresAt.toLocaleDateString('es-BO') : '⏳ Pendiente de primera conexión'
       await send(chatId,
         `✅ *Cliente registrado*\n\n` +
@@ -941,13 +1237,108 @@ async function handleText(chatId: number, userId: number, text: string): Promise
         `🔐 Contraseña: \`${panelData.password || '-'}\`\n` +
         `📦 Plan: ${planFormateado || panelData.paquete || '-'}\n` +
         `📅 Expira: *${fechaStr}*\n` +
-        `📱 Celular: \`${celular}\``,
+        `📱 Celular: \`${celular}\`\n` +
+        (txRegistrada ? `💰 _Transacción registrada en finanzas_` : `⚠️ _Plan no reconocido, transacción no registrada_`),
         BACK_KB
       )
     } catch (e: any) {
       await send(chatId, `❌ No se encontró *${usuarioIPTV}* en el panel o hubo un error:\n_${e.message}_`, BACK_KB)
     }
     return
+  }
+
+  if (state.type === 'nuevo_panel_usuario') {
+    pendingAction.delete(ADMIN_ID)
+    const valor = text.trim()
+    if (!valor || valor.length < 2) {
+      await send(chatId, '⚠️ Usuario inválido. Mínimo 2 caracteres.', BACK_KB); return
+    }
+    await prisma.config.upsert({
+      where: { key: 'panel_usuario' },
+      update: { value: valor },
+      create: { key: 'panel_usuario', value: valor },
+    })
+    const cfgPass = await prisma.config.findUnique({ where: { key: 'panel_password' } })
+    if (cfgPass?.value) setPanelCredentials(valor, cfgPass.value)
+    await send(chatId, `✅ *Usuario del panel actualizado*\n\n👤 Nuevo usuario: \`${valor}\``, BACK_KB)
+    return
+  }
+
+  if (state.type === 'nuevo_panel_password') {
+    pendingAction.delete(ADMIN_ID)
+    const valor = text.trim()
+    if (!valor || valor.length < 2) {
+      await send(chatId, '⚠️ Contraseña inválida. Mínimo 2 caracteres.', BACK_KB); return
+    }
+    await prisma.config.upsert({
+      where: { key: 'panel_password' },
+      update: { value: valor },
+      create: { key: 'panel_password', value: valor },
+    })
+    const cfgUser = await prisma.config.findUnique({ where: { key: 'panel_usuario' } })
+    if (cfgUser?.value) setPanelCredentials(cfgUser.value, valor)
+    await send(chatId, `✅ *Contraseña del panel actualizada*`, BACK_KB)
+    return
+  }
+
+  if (state.type === 'devolucion_buscar') {
+    pendingAction.delete(ADMIN_ID)
+    const users = await prisma.user.findMany({
+      where: { OR: [{ usuario: text }, { celular: text }], plan: { notIn: ['DEMO 3 HORA', 'DEMO EXPIRADA'] } },
+    })
+    if (users.length === 0) {
+      await send(chatId, `❌ No se encontró ningún cliente con *${text}*`,
+        kb([[{ text: '🔍 Intentar de nuevo', cb: 'devolucion' }, { text: '❌ Cancelar', cb: 'finanzas_menu' }]])
+      ); return
+    }
+    const u = users[0]
+    const ultimaTx = await (prisma as any).transaccion.findFirst({
+      where: { phoneNumber: u.celular, tipo: { not: 'devolucion' } },
+      orderBy: { fecha: 'desc' },
+    })
+    const monto = ultimaTx?.precio ?? 0
+    await send(chatId,
+      `💸 *REGISTRAR DEVOLUCIÓN*\n\n` +
+      `👤 Cliente: *${u.nombre}*\n` +
+      `🔑 Usuario: *${u.usuario}*\n` +
+      `💰 Última transacción: *Bs. ${monto.toFixed(2)}*\n\n` +
+      `¿Confirmar devolución de *Bs. ${monto.toFixed(2)}*?`,
+      kb([
+        [{ text: `✅ Sí, devolver Bs. ${monto.toFixed(2)}`, cb: `dev_ok_${u.usuario}` }],
+        [{ text: '✏️ Monto personalizado', cb: `dev_monto_${u.usuario}` }],
+        [{ text: '❌ Cancelar', cb: 'finanzas_menu' }],
+      ])
+    ); return
+  }
+
+  if (state.type === 'devolucion_monto') {
+    const usuario = state.usuarioTarget!
+    pendingAction.delete(ADMIN_ID)
+    const monto = parseFloat(text.replace(',', '.'))
+    if (isNaN(monto) || monto <= 0) {
+      await send(chatId, '⚠️ Monto inválido. Escribe un número mayor a 0.',
+        kb([[{ text: '❌ Cancelar', cb: 'finanzas_menu' }]])
+      ); return
+    }
+    const user = await prisma.user.findUnique({ where: { usuario } })
+    const ultimaTx = await (prisma as any).transaccion.findFirst({
+      where: { phoneNumber: user?.celular, tipo: { not: 'devolucion' } },
+      orderBy: { fecha: 'desc' },
+    })
+    const creditosRetornados = ultimaTx?.creditos ?? 0
+    const costoRetornado    = ultimaTx?.costo     ?? 0
+    await (prisma as any).transaccion.create({
+      data: { tipo: 'devolucion', plan: 'Devolución', precio: monto, creditos: creditosRetornados, costo: costoRetornado, ganancia: 0, phoneNumber: user?.celular ?? '' }
+    })
+    await prisma.user.deleteMany({ where: { usuario } })
+    await send(chatId,
+      `✅ *Devolución registrada*\n\n` +
+      `👤 *${user?.nombre ?? usuario}*\n` +
+      `💸 Monto devuelto: *Bs. ${monto.toFixed(2)}*\n` +
+      `🪙 Créditos retornados: *${creditosRetornados.toFixed(2)}*\n` +
+      `🗑️ Cuenta eliminada de la base de datos.`,
+      kb([[{ text: '⬅️ Finanzas', cb: 'finanzas_menu' }]])
+    ); return
   }
 }
 
@@ -972,6 +1363,7 @@ async function pollLoop(): Promise<void> {
             await handleText(chat.id, from.id, text)
           } else if (upd.callback_query) {
             const { id, from, message, data } = upd.callback_query
+            if (from.id !== ADMIN_ID) { await answerCb(id); continue }
             await handleCallback(id, message.chat.id, message.message_id, data)
           }
         } catch (e: any) {
@@ -990,6 +1382,7 @@ export function iniciarTelegramAdmin(): void {
   console.log('🤖 [Telegram] Iniciando...')
   running = true
 
+  cargarCredencialesPanel().catch(e => console.error('Error cargando credenciales panel:', e.message))
   iniciarSchedulerMensual()
   setTimeout(() => notificarCreditosAlArrancar(), 8000)
 

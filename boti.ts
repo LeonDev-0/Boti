@@ -4,6 +4,7 @@ import makeWASocket, {
   fetchLatestBaileysVersion,
   WASocket,
   ConnectionState,
+  Browsers,
 } from '@whiskeysockets/baileys'
 // @ts-ignore
 import QRCode from 'qrcode-terminal'
@@ -12,7 +13,7 @@ import pino from 'pino'
 import fs from 'fs'
 import { prisma } from './lib/prisma.js'
 import { handleMessage, iniciarPollerPagos, iniciarPollerExpiraciones, iniciarPollerActivacionesPendientes, setSock } from './messageHandler.js'
-import { iniciarTelegramAdmin, detenerTelegramAdmin, setResetSessionCallback, notifyQrCode, notifyBotConectado } from './telegramAdmin.js'
+import { iniciarTelegramAdmin, detenerTelegramAdmin, setResetSessionCallback, setIniciarWACallback, setCancelarWACallback, setWAStatus, notifyQrCode, notifyBotConectado, notifyWAEsperando } from './telegramAdmin.js'
 
 const NOISE_PATTERNS = [
   'Decrypted message with closed session',
@@ -51,24 +52,55 @@ const _origWarn = console.warn.bind(console)
 console.warn = (...args: any[]) => { if (!isNoise(...args)) _origWarn(...args) }
 
 let currentSock: WASocket | null = null
+let disconnectedAt: number | null = null
+let reconnectAttempts = 0
+let cancelandoConexion = false
+const NOTIF_UMBRAL_MS = 5 * 60 * 1000 // 5 minutos
+
+async function cancelarConexionWA(): Promise<void> {
+  cancelandoConexion = true
+  console.log('🛑 Conexión WhatsApp cancelada por el admin')
+  if (currentSock) {
+    try { (currentSock.ev as any).removeAllListeners() } catch {}
+    try { (currentSock.ws as any).terminate() } catch {}
+    try { (currentSock.ws as any).close() } catch {}
+    currentSock = null
+  }
+  setWAStatus('desconectado')
+  setTimeout(() => { cancelandoConexion = false }, 3000)
+}
 
 async function resetSession(): Promise<void> {
   console.log('🔄 Reiniciando sesión de WhatsApp...')
   try {
     if (currentSock) {
-      currentSock.ev.removeAllListeners()
-      ;(currentSock.ws as any).close()
+      ;(currentSock.ev as any).removeAllListeners()
+      try { (currentSock.ws as any).terminate() } catch {}
+      try { (currentSock.ws as any).close() } catch {}
       currentSock = null
     }
   } catch {}
-  if (fs.existsSync('./auth')) {
-    fs.rmSync('./auth', { recursive: true, force: true })
-    console.log('🗑️ Carpeta auth eliminada')
+
+  // Esperar a que el sistema operativo libere los archivos
+  await new Promise(r => setTimeout(r, 2000))
+
+  // Borrar archivos dentro de auth/ sin tocar el directorio (es volumen Docker)
+  try {
+    if (fs.existsSync('./auth')) {
+      for (const file of fs.readdirSync('./auth')) {
+        try { fs.rmSync(`./auth/${file}`, { recursive: true, force: true }) } catch {}
+      }
+      console.log('🗑️ Archivos de sesión eliminados')
+    }
+  } catch (e: any) {
+    console.error('❌ No se pudo limpiar auth:', e.message)
   }
+
   setTimeout(() => startBot(), 1000)
 }
 
 async function startBot(): Promise<void> {
+  setWAStatus('conectando')
   const { state, saveCreds } = await useMultiFileAuthState('auth')
   const { version } = await fetchLatestBaileysVersion()
 
@@ -78,6 +110,13 @@ async function startBot(): Promise<void> {
     logger: pino({ level: 'silent' }),
     version,
     connectTimeoutMs: 60000,
+    markOnlineOnConnect: false,
+    syncFullHistory: false,
+    browser: Browsers.ubuntu('Chrome'),
+    keepAliveIntervalMs: 30000,
+    retryRequestDelayMs: 2000,
+    generateHighQualityLinkPreview: false,
+    getMessage: async () => ({ conversation: '' }),
   })
 
   currentSock = sock
@@ -103,24 +142,48 @@ async function startBot(): Promise<void> {
 
       console.log('🔌 Conexión cerrada. Reconectando:', shouldReconnect)
 
+      if (cancelandoConexion) {
+        console.log('🛑 Reconexión omitida — cancelado por el admin')
+        return
+      }
+
       if (shouldReconnect) {
-        setTimeout(() => startBot(), 3000)
+        setWAStatus('conectando')
+        disconnectedAt = Date.now()
+        const delay = Math.min(30000, 3000 * Math.pow(2, reconnectAttempts))
+        reconnectAttempts++
+        console.log(`🔄 Reconectando en ${Math.round(delay / 1000)}s (intento ${reconnectAttempts})`)
+        setTimeout(() => startBot(), delay)
       } else {
-        console.log('❌ Sesión cerrada. Elimina la carpeta "auth" y vuelve a escanear QR')
+        setWAStatus('desconectado')
+        console.log('❌ Sesión cerrada. Usa Telegram para vincular un número nuevo.')
       }
     }
 
     if (connection === 'open') {
       console.log('🤖 Bot MasTV conectado correctamente')
+      reconnectAttempts = 0
       setSock(sock)
       const numero = sock.user?.id?.split(':')[0]?.split('@')[0] ?? 'desconocido'
-      await notifyBotConectado(numero)
+      const primeraConexion = disconnectedAt === null
+      const caídaLarga = disconnectedAt !== null && (Date.now() - disconnectedAt) > NOTIF_UMBRAL_MS
+      disconnectedAt = null
+      if (primeraConexion || caídaLarga) {
+        await notifyBotConectado(numero)
+      }
     }
   })
 
   // 📩 ESCUCHAR MENSAJES
-  sock.ev.on('messages.upsert', async ({ messages }) => {
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return
     const msg = messages[0]
+    if (!msg) return
+    if (msg.key.fromMe) return
+    if (msg.key.remoteJid === 'status@broadcast') return
+    if (msg.key.remoteJid?.endsWith('@g.us')) return
+    // Marcar como leído (simula comportamiento humano)
+    try { await sock.readMessages([msg.key]) } catch {}
     await handleMessage(sock, msg)
   })
 
@@ -139,7 +202,17 @@ iniciarPollerExpiraciones().catch(console.error)
 iniciarPollerActivacionesPendientes().catch(console.error)
 iniciarTelegramAdmin()
 setResetSessionCallback(resetSession)
+setIniciarWACallback(() => startBot().catch(console.error))
+setCancelarWACallback(cancelarConexionWA)
 
-startBot().catch(console.error)
+// Si ya hay sesión guardada → conectar automáticamente
+// Si no hay sesión → esperar botón "Conectar WhatsApp" en Telegram
+const authExiste = fs.existsSync('./auth') &&
+  fs.readdirSync('./auth').filter((f: string) => !f.startsWith('.')).length > 0
 
-//este arvchivo es boti.ts
+if (authExiste) {
+  startBot().catch(console.error)
+} else {
+  console.log('⚠️ No hay sesión de WhatsApp. Usa Telegram para vincular un número.')
+  setTimeout(() => notifyWAEsperando().catch(console.error), 10000)
+}

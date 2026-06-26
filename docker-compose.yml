@@ -9,3 +9,9 @@ services:
     environment:
       - DATABASE_URL=file:./dev.db
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+      - TELEGRAM_TOKEN=8673050602:AAFuGN6e_JbRV_MRJ-mq2NfZ1RWZE1ftGBE
+      - TELEGRAM_ADMIN_ID=1194525126
+      - ADMIN_WHATSAPP=64598912
+      - VERIPAGOS_USER=zandrotja
+      - VERIPAGOS_PASS=H?F1&crEcz
+      - VERIPAGOS_SECRET=c93b4584-2292-46c1-a698-6ae8b4a01d83

@@ -7,21 +7,26 @@ import https from 'https'
 // CONFIGURACION VERIPAGOS
 // =============================================
 const VERIPAGOS_CONFIG = {
-  USER: 'zandrotja',
-  PASS: 'H?F1&crEcz',
-  SECRET_KEY: 'c93b4584-2292-46c1-a698-6ae8b4a01d83',
+  USER:       process.env.VERIPAGOS_USER   ?? '',
+  PASS:       process.env.VERIPAGOS_PASS   ?? '',
+  SECRET_KEY: process.env.VERIPAGOS_SECRET ?? '',
 }
 const VERIPAGOS_AUTH = 'Basic ' + Buffer.from(`${VERIPAGOS_CONFIG.USER}:${VERIPAGOS_CONFIG.PASS}`).toString('base64')
-const ADMIN_NUMBER = '64598912'
+const ADMIN_NUMBER = process.env.ADMIN_WHATSAPP ?? ''
 
 // =============================================
 // ANTI-BAN: wrapper que simula comportamiento humano antes de enviar
 // =============================================
 async function sendMsg(socket: WASocket, jid: string, content: any): Promise<void> {
-  if (content.text) {
+  const text = content.text ?? content.caption ?? ''
+  if (text) {
     await socket.sendPresenceUpdate('composing', jid)
-    await new Promise(r => setTimeout(r, 200))
+    const base = text.length * 25
+    const jitter = base * (0.8 + Math.random() * 0.4)
+    const typingMs = Math.min(4500, Math.max(800, jitter))
+    await new Promise(r => setTimeout(r, typingMs))
     await socket.sendPresenceUpdate('paused', jid)
+    await new Promise(r => setTimeout(r, 100 + Math.random() * 200))
   }
   await socket.sendMessage(jid, content)
 }
@@ -527,7 +532,7 @@ export function iniciarPollerActivacion(usuario: string, dbUserId: number): void
         console.error(`❌ Error en poller activación (${usuario}):`, e.message)
       }
     }
-  }, 2 * 60 * 1000)
+  }, 5 * 60 * 1000)
 
   activationPollers.set(usuario, intervalo)
 }
@@ -606,7 +611,7 @@ async function enviarRecordatorio(user: { id: number; usuario: string; celular: 
       `━━━━━━━━━━━━━━━━━━\n\n` +
       `Para renovar escribe *5️⃣*\n\n` +
       `0️⃣ Menú principal`
-    await sockGlobal.sendMessage(jid, { text: textoRecordatorio })
+    await enviar(jid, textoRecordatorio)
     await prisma.user.update({ where: { id: user.id }, data: { reminderSent: true } })
     console.log(`📨 Recordatorio enviado a ${user.celular} (usuario: ${user.usuario})`)
   } catch (e: any) {
@@ -653,8 +658,41 @@ export async function iniciarPollerExpiraciones(): Promise<void> {
 
 async function enviar(jid: string, text: string): Promise<void> {
   if (!sockGlobal) return
-  try { await sockGlobal.sendMessage(jid, { text }) }
+  try {
+    await sockGlobal.sendPresenceUpdate('composing', jid)
+    const base = text.length * 25
+    const jitter = base * (0.8 + Math.random() * 0.4)
+    const typingMs = Math.min(4500, Math.max(800, jitter))
+    await new Promise(r => setTimeout(r, typingMs))
+    await sockGlobal.sendPresenceUpdate('paused', jid)
+    await new Promise(r => setTimeout(r, 100 + Math.random() * 200))
+    await sockGlobal.sendMessage(jid, { text })
+  }
   catch (e: any) { console.error('Error enviando mensaje:', e.message) }
+}
+
+async function enviarConReintento(jid: string, text: string, intentos = 3, delayMs = 5000): Promise<void> {
+  for (let i = 0; i < intentos; i++) {
+    if (sockGlobal) {
+      try {
+        await sockGlobal.sendPresenceUpdate('composing', jid)
+        const base = text.length * 25
+        const jitter = base * (0.8 + Math.random() * 0.4)
+        const typingMs = Math.min(4500, Math.max(800, jitter))
+        await new Promise(r => setTimeout(r, typingMs))
+        await sockGlobal.sendPresenceUpdate('paused', jid)
+        await new Promise(r => setTimeout(r, 100 + Math.random() * 200))
+        await sockGlobal.sendMessage(jid, { text })
+        return
+      } catch (e: any) {
+        console.error(`⚠️ Error enviando (intento ${i + 1}/${intentos}):`, e.message)
+      }
+    } else {
+      console.log(`⏳ Socket no disponible, esperando para reintento ${i + 1}/${intentos}...`)
+    }
+    if (i < intentos - 1) await new Promise(r => setTimeout(r, delayMs))
+  }
+  console.error('❌ No se pudo enviar el mensaje de credenciales tras varios intentos')
 }
 
 export function setSock(sock: WASocket): void {
@@ -819,6 +857,18 @@ async function registrarTransaccion(tipo: 'nueva' | 'renovacion' | 'activacion',
   }
 }
 
+export async function registrarTransaccionDesdePanel(
+  paquete: string,
+  conexiones: string,
+  phoneNumber: string,
+  tipo: 'nueva' | 'renovacion' | 'activacion' = 'nueva',
+): Promise<boolean> {
+  const precio = detectarPrecioDesdePanel(paquete, conexiones)
+  if (!PLANES_MAP[precio]) return false
+  await registrarTransaccion(tipo, precio, phoneNumber)
+  return true
+}
+
 // =============================================
 // PROCESAR CUENTA NUEVA
 // =============================================
@@ -880,7 +930,7 @@ async function procesarCuentaNueva(
     await registrarTransaccion('nueva', precio, phoneNumber)
     await (prisma as any).demoHistory.deleteMany({ where: { celular: phoneNumber } }).catch(() => {})
 
-    await enviar(jid,
+    await enviarConReintento(jid,
       `✅ *¡CUENTA ACTIVADA!*\n\n` +
       `┌───────────────\n` +
       `👤 Usuario: *${iptvData.usuario}*\n` +
@@ -895,7 +945,7 @@ async function procesarCuentaNueva(
     )
   } catch (e: any) {
     console.error('Error procesando cuenta nueva:', e.message)
-    await enviar(jid, `⚠️ *NO SE PUDO ACTIVAR LA CUENTA*\n\nTu pago fue recibido correctamente, pero ocurrió un problema temporal al crear la cuenta.\n\n📞 Por favor contacta soporte:\nhttps://wa.me/59164598912\n\n0️⃣ Volver al Menú`)
+    await enviarConReintento(jid, `⚠️ *NO SE PUDO ACTIVAR LA CUENTA*\n\nTu pago fue recibido correctamente, pero ocurrió un problema temporal al crear la cuenta.\n\n📞 Por favor contacta soporte:\nhttps://wa.me/59164598912\n\n0️⃣ Volver al Menú`)
   } finally {
     finalizarProcesoCritico(jid)
   }
@@ -969,7 +1019,7 @@ async function procesarRenovacion(
     await registrarTransaccion(esActivacionDemo ? 'activacion' : 'renovacion', precio, phoneNumber)
     await (prisma as any).demoHistory.deleteMany({ where: { celular: phoneNumber } }).catch(() => {})
 
-    await enviar(jid,
+    await enviarConReintento(jid,
       `✅ *${esActivacionDemo ? '¡CUENTA ACTIVADA!' : '¡CUENTA RENOVADA!'}*\n\n` +
       `┌───────────────\n` +
       `👤 Usuario: *${usuarioIPTV}*\n` +
@@ -982,7 +1032,7 @@ async function procesarRenovacion(
     )
   } catch (e: any) {
     console.error('Error procesando renovación:', e.message)
-    await enviar(jid, `⚠️ *NO SE PUDO RENOVAR LA CUENTA*\n\nTu pago fue recibido correctamente, pero ocurrió un problema temporal al renovar la cuenta.\n\n📞 Por favor contacta soporte:\nhttps://wa.me/59164598912\n\n0️⃣ Volver al Menú`)
+    await enviarConReintento(jid, `⚠️ *NO SE PUDO RENOVAR LA CUENTA*\n\nTu pago fue recibido correctamente, pero ocurrió un problema temporal al renovar la cuenta.\n\n📞 Por favor contacta soporte:\nhttps://wa.me/59164598912\n\n0️⃣ Volver al Menú`)
   } finally {
     finalizarProcesoCritico(jid)
   }
@@ -1252,6 +1302,9 @@ async function _handleMessage(sock: WASocket, msg: any): Promise<void> {
     userStates.delete(phoneNumber)
   }
   lastActivity.set(phoneNumber, ahora)
+
+  // Simular tiempo de lectura antes de responder (comportamiento humano)
+  await new Promise(r => setTimeout(r, 600 + Math.random() * 1200))
 
   // ── COMPROBANTE PAGO MANUAL ─────────────────────────────────
   if (userStates.get(phoneNumber) === 'esperando_comprobante') {
