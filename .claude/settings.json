@@ -7,7 +7,11 @@
       "Bash(git checkout *)",
       "Bash(npm install *)",
       "Bash(git commit *)",
-      "Bash(docker push *)"
+      "Bash(docker push *)",
+      "Bash(git rm *)",
+      "Bash(git filter-branch *)",
+      "Bash(set FILTER_BRANCH_SQUELCH_WARNING=1)",
+      "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --force --index-filter \"git rm -rf --cached --ignore-unmatch panel-profile/ auth/ dev.db dev.db-journal\" --prune-empty --tag-name-filter cat -- --all)"
     ]
   }
 }
