@@ -57,6 +57,20 @@ let reconnectAttempts = 0
 let cancelandoConexion = false
 const NOTIF_UMBRAL_MS = 5 * 60 * 1000 // 5 minutos
 
+let cachedVersion: [number, number, number] | null = null
+let cachedVersionAt = 0
+const VERSION_CACHE_MS = 6 * 60 * 60 * 1000 // 6 horas
+
+async function getBaileysVersion(): Promise<[number, number, number]> {
+  if (cachedVersion && Date.now() - cachedVersionAt < VERSION_CACHE_MS) {
+    return cachedVersion
+  }
+  const { version } = await fetchLatestBaileysVersion()
+  cachedVersion = version
+  cachedVersionAt = Date.now()
+  return version
+}
+
 async function cancelarConexionWA(): Promise<void> {
   cancelandoConexion = true
   console.log('🛑 Conexión WhatsApp cancelada por el admin')
@@ -102,7 +116,7 @@ async function resetSession(): Promise<void> {
 async function startBot(): Promise<void> {
   setWAStatus('conectando')
   const { state, saveCreds } = await useMultiFileAuthState('auth')
-  const { version } = await fetchLatestBaileysVersion()
+  const version = await getBaileysVersion()
 
   const sock: WASocket = makeWASocket({
     auth: state,

@@ -19,6 +19,27 @@ let activePanelIndex = 0
 // ===============================
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
+const PUPPETEER_PAGE_TIMEOUT  = 90_000   // 90s por operación individual de página
+const PUPPETEER_FUNC_TIMEOUT  = 3 * 60_000  // 3 min máximo por función exportada
+const PUPPETEER_CREATE_TIMEOUT = 5 * 60_000 // 5 min para crear cuenta (3 intentos)
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`⏱️ Timeout (${ms / 1000}s) en: ${label}`)), ms)
+    ),
+  ])
+}
+
+async function newPage(): Promise<import('puppeteer').Page> {
+  if (!browser) throw new Error('Browser no inicializado')
+  const page = await browser.newPage()
+  page.setDefaultTimeout(PUPPETEER_PAGE_TIMEOUT)
+  page.setDefaultNavigationTimeout(PUPPETEER_PAGE_TIMEOUT)
+  return page
+}
+
 let PANEL_CREDENTIALS = { username: 'zandrotjarg', password: 'leon1234' }
 
 export function setPanelCredentials(username: string, password: string): void {
@@ -227,7 +248,7 @@ async function intentarCrearUsuario(planTexto: string, incluirAdultos = true): P
 }> {
   if (!browser) throw new Error('No se pudo inicializar el navegador')
 
-  const page = await browser.newPage()
+  const page = await newPage()
   const usuario = generarUsuario()
 
   console.log('👤 Usuario generado:', usuario)
@@ -276,7 +297,13 @@ async function intentarCrearUsuario(planTexto: string, incluirAdultos = true): P
 // ===============================
 // FLUJO PRINCIPAL — reintentos con nuevo usuario si falla
 // ===============================
-export async function crearUsuarioIPTV(planTexto: string, incluirAdultos = true): Promise<{
+export function crearUsuarioIPTV(planTexto: string, incluirAdultos = true): Promise<{
+  usuario: string; password: string; plan: string; expira: string
+}> {
+  return withTimeout(_crearUsuarioIPTV(planTexto, incluirAdultos), PUPPETEER_CREATE_TIMEOUT, 'crearUsuarioIPTV')
+}
+
+async function _crearUsuarioIPTV(planTexto: string, incluirAdultos = true): Promise<{
   usuario: string
   password: string
   plan: string
@@ -312,7 +339,7 @@ export async function crearUsuarioIPTV(planTexto: string, incluirAdultos = true)
 // ===============================
 export async function leerCreditosPanel(): Promise<number | null> {
   await initBrowser()
-  const page = await browser!.newPage()
+  const page = await newPage()
   try {
     await navegarConLogin(page, '/dashboard')
     await page.waitForFunction(() => {
@@ -356,7 +383,14 @@ export async function cerrarNavegador(): Promise<void> {
 // ===============================
 // BUSCAR USUARIO IPTV EXISTENTE
 // ===============================
-export async function buscarUsuarioIPTV(usuario: string): Promise<{
+export function buscarUsuarioIPTV(usuario: string): Promise<{
+  usuario: string; password: string; reseller: string; expira: string
+  baneado: string; paquete: string; trial: string; conexiones: string; creado: string
+}> {
+  return withTimeout(_buscarUsuarioIPTV(usuario), PUPPETEER_FUNC_TIMEOUT, 'buscarUsuarioIPTV')
+}
+
+async function _buscarUsuarioIPTV(usuario: string): Promise<{
   usuario: string
   password: string
   reseller: string
@@ -370,7 +404,7 @@ export async function buscarUsuarioIPTV(usuario: string): Promise<{
   await initBrowser()
   if (!browser) throw new Error('No se pudo inicializar el navegador')
 
-  const page = await browser.newPage()
+  const page = await newPage()
 
   try {
     console.log('🌐 Navegando al panel...')
@@ -423,11 +457,15 @@ export async function buscarUsuarioIPTV(usuario: string): Promise<{
 // ===============================
 // RENOVAR USUARIO IPTV
 // ===============================
-export async function renovarUsuarioIPTV(usuario: string, planTexto: string): Promise<void> {
+export function renovarUsuarioIPTV(usuario: string, planTexto: string): Promise<void> {
+  return withTimeout(_renovarUsuarioIPTV(usuario, planTexto), PUPPETEER_FUNC_TIMEOUT, 'renovarUsuarioIPTV')
+}
+
+async function _renovarUsuarioIPTV(usuario: string, planTexto: string): Promise<void> {
   await initBrowser()
   if (!browser) throw new Error('No se pudo inicializar el navegador')
 
-  const page = await browser.newPage()
+  const page = await newPage()
 
   try {
     console.log('🌐 Navegando al panel...')
@@ -570,11 +608,15 @@ export async function renovarUsuarioIPTV(usuario: string, planTexto: string): Pr
 // ===============================
 // ACTIVAR CANALES ADULTOS EN CUENTA EXISTENTE
 // ===============================
-export async function activarAdultosEnUsuario(usuario: string): Promise<void> {
+export function activarAdultosEnUsuario(usuario: string): Promise<void> {
+  return withTimeout(_activarAdultosEnUsuario(usuario), PUPPETEER_FUNC_TIMEOUT, 'activarAdultosEnUsuario')
+}
+
+async function _activarAdultosEnUsuario(usuario: string): Promise<void> {
   await initBrowser()
   if (!browser) throw new Error('No se pudo inicializar el navegador')
 
-  const page = await browser.newPage()
+  const page = await newPage()
 
   try {
     console.log('🌐 Navegando al panel...')
@@ -657,11 +699,15 @@ export async function activarAdultosEnUsuario(usuario: string): Promise<void> {
 // ===============================
 // DESACTIVAR CANALES ADULTOS EN CUENTA EXISTENTE
 // ===============================
-export async function desactivarAdultosEnUsuario(usuario: string): Promise<void> {
+export function desactivarAdultosEnUsuario(usuario: string): Promise<void> {
+  return withTimeout(_desactivarAdultosEnUsuario(usuario), PUPPETEER_FUNC_TIMEOUT, 'desactivarAdultosEnUsuario')
+}
+
+async function _desactivarAdultosEnUsuario(usuario: string): Promise<void> {
   await initBrowser()
   if (!browser) throw new Error('No se pudo inicializar el navegador')
 
-  const page = await browser.newPage()
+  const page = await newPage()
 
   try {
     console.log('🌐 Navegando al panel...')

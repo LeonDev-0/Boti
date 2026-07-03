@@ -176,6 +176,21 @@ const adultosPreferencia = new Map<string, boolean>()
 const pendingNombreParaAdultos = new Map<string, { nombre: string; precio: string }>()
 const pendingNombreDemo = new Map<string, string>()
 
+// Limpieza periódica de estados inactivos para evitar memory leaks
+setInterval(() => {
+  const INACTIVO_MS = 30 * 60 * 1000
+  const ahora = Date.now()
+  for (const [phoneNumber, ts] of lastActivity) {
+    if (ahora - ts > INACTIVO_MS) {
+      lastActivity.delete(phoneNumber)
+      userStates.delete(phoneNumber)
+      adultosPreferencia.delete(phoneNumber)
+      pendingNombreParaAdultos.delete(phoneNumber)
+      pendingNombreDemo.delete(phoneNumber)
+    }
+  }
+}, 15 * 60 * 1000)
+
 const TEXTO_PREGUNTA_ADULTOS =
   `🔞 *¿Deseas incluir canales para adultos (+18)?*\n\n` +
   `1️⃣ Sí, incluir contenido adulto\n` +
@@ -494,7 +509,7 @@ export function iniciarPollerActivacion(usuario: string, dbUserId: number): void
                 ? `${planActual.dispositivos} Dispositivo${planActual.dispositivos > 1 ? 's' : ''} – ${planActual.duracion} ${planActual.bonus}`
                 : `${planActual.dispositivos} Dispositivo${planActual.dispositivos > 1 ? 's' : ''} – ${planActual.duracion}`)
             : undefined
-          const updated = await prisma.user.update({
+          await prisma.user.update({
             where: { id: dbUserId },
             data: {
               expiresAt: fechaReal,
@@ -504,7 +519,6 @@ export function iniciarPollerActivacion(usuario: string, dbUserId: number): void
             }
           })
           console.log(`✅ Cuenta ${usuario} ACTIVADA — Fecha: ${fechaReal.toISOString()} | Plan: ${planCompleto ?? 'sin cambio'} | Pass: ${data.password ? 'actualizado' : 'sin cambio'}`)
-          programarRecordatorio({ ...updated, expiresAt: fechaReal })
           clearInterval(intervalo)
           activationPollers.delete(usuario)
         }
@@ -555,13 +569,14 @@ export async function iniciarPollerActivacionesPendientes(): Promise<void> {
 }
 
 // =============================================
-// RECORDATORIOS DE EXPIRACIÓN (setTimeout exacto)
+// RECORDATORIOS DE EXPIRACIÓN (poller cada hora)
 // =============================================
-const reminderTimers = new Map<number, ReturnType<typeof setTimeout>>()
 
-async function enviarRecordatorio(user: { id: number; usuario: string; celular: string; expiresAt: Date | null; reminderSent: boolean }): Promise<void> {
-  if (!sockGlobal) return
-  reminderTimers.delete(user.id)
+async function enviarRecordatorio(user: { id: number; usuario: string; celular: string; expiresAt: Date | null }): Promise<void> {
+  if (!sockGlobal) {
+    console.warn(`⚠️ Recordatorio postergado (WA desconectado): ${user.celular} — el poller lo reintentará en 1h`)
+    return
+  }
 
   try {
     // Verificar fecha real en el panel antes de enviar
@@ -580,17 +595,16 @@ async function enviarRecordatorio(user: { id: number; usuario: string; celular: 
       const diffHoras = diffMs / 3600000
 
       if (diffHoras > 1) {
-        // La fecha cambió (admin la modificó) — actualizar DB y reprogramar
+        // La fecha cambió — actualizar DB con reminderSent: false; el poller la retoma sola
         console.log(`🔄 Fecha cambiada en panel para ${user.usuario}: ${fechaPanel.toISOString()} (era ${user.expiresAt?.toISOString()})`)
-        const updated = await prisma.user.update({ where: { id: user.id }, data: { expiresAt: fechaPanel, reminderSent: false } })
-        programarRecordatorio({ ...updated, expiresAt: fechaPanel })
+        await prisma.user.update({ where: { id: user.id }, data: { expiresAt: fechaPanel, reminderSent: false } })
         return
       }
-      // Fecha coincide — sincronizar de todas formas para mantener DB alineada con panel
+      // Fecha coincide — sincronizar para mantener DB alineada con panel
       await prisma.user.update({ where: { id: user.id }, data: { expiresAt: fechaPanel } }).catch(() => {})
     }
 
-    // Fecha correcta — enviar recordatorio
+    // Enviar recordatorio
     const fechaExp = (fechaPanel ?? user.expiresAt) ? fechaCorta(new Date((fechaPanel ?? user.expiresAt)!)) : '-'
     const jid = celularAJid(user.celular)
     const dbUser = await prisma.user.findUnique({ where: { id: user.id } })
@@ -619,41 +633,33 @@ async function enviarRecordatorio(user: { id: number; usuario: string; celular: 
   }
 }
 
-export function programarRecordatorio(user: { id: number; usuario: string; celular: string; expiresAt: Date | null; reminderSent: boolean }): void {
-  if (!user.expiresAt || user.reminderSent) return
-
-  const ahora = Date.now()
-  const disparo = user.expiresAt.getTime() - 24 * 60 * 60 * 1000
-  const delay = disparo - ahora
-
-  if (reminderTimers.has(user.id)) clearTimeout(reminderTimers.get(user.id)!)
-
-  if (delay <= 0) {
-    // Ya pasó el momento de avisar — enviar de inmediato
-    enviarRecordatorio(user)
-    return
-  }
-
-  // Node.js setTimeout max es 2^31-1 ms (~24.8 días). Para delays mayores, re-programa en tramos.
-  const MAX_TIMEOUT_MS = 2147483647
-  if (delay > MAX_TIMEOUT_MS) {
-    const timer = setTimeout(() => programarRecordatorio(user), MAX_TIMEOUT_MS)
-    reminderTimers.set(user.id, timer)
-    console.log(`⏰ Recordatorio pre-programado (tramo largo): ${user.usuario} en ${Math.round(delay / 3600000)}h`)
-    return
-  }
-
-  const timer = setTimeout(() => enviarRecordatorio(user), delay)
-  reminderTimers.set(user.id, timer)
-  console.log(`⏰ Recordatorio programado: ${user.usuario} en ${Math.round(delay / 3600000)}h`)
-}
-
 export async function iniciarPollerExpiraciones(): Promise<void> {
-  const pendientes = await prisma.user.findMany({
-    where: { plan: { not: 'DEMO 3 HORA' }, reminderSent: false, expiresAt: { not: null, gt: new Date() } }
-  })
-  for (const u of pendientes) programarRecordatorio(u)
-  console.log(`⏰ ${pendientes.length} recordatorio(s) programado(s) al iniciar`)
+  const ejecutar = async () => {
+    if (!sockGlobal) {
+      console.log('⏸️ Poller recordatorios: WA desconectado, se reintentará en 1h')
+      return
+    }
+    try {
+      const ventana = new Date(Date.now() + 25 * 60 * 60 * 1000)
+      const candidatos = await prisma.user.findMany({
+        where: {
+          plan: { not: 'DEMO 3 HORA' },
+          reminderSent: false,
+          expiresAt: { not: null, lte: ventana, gt: new Date() },
+        },
+      })
+      if (candidatos.length > 0)
+        console.log(`🔔 Poller recordatorios: ${candidatos.length} cuenta(s) vencen en <25h`)
+      for (const u of candidatos) {
+        await enviarRecordatorio(u)
+      }
+    } catch (e: any) {
+      console.error('❌ Error en poller de recordatorios:', e.message)
+    }
+  }
+
+  await ejecutar()
+  setInterval(ejecutar, 60 * 60 * 1000)
 }
 
 async function enviar(jid: string, text: string): Promise<void> {
@@ -1015,7 +1021,6 @@ async function procesarRenovacion(
     }
 
     const userRecord = await prisma.user.update({ where: { id: existingUserId }, data: updateData })
-    programarRecordatorio({ ...userRecord, expiresAt })
     await registrarTransaccion(esActivacionDemo ? 'activacion' : 'renovacion', precio, phoneNumber)
     await (prisma as any).demoHistory.deleteMany({ where: { celular: phoneNumber } }).catch(() => {})
 
