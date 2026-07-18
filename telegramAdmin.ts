@@ -53,7 +53,10 @@ export async function notifyQrCode(buffer: Buffer): Promise<void> {
 export async function notifyBotConectado(numero: string): Promise<void> {
   waStatus = 'conectado'
   try {
-    await send(ADMIN_ID, `✅ *Bot conectado correctamente*\n\n📱 Número activo: *+${numero}*`)
+    await send(ADMIN_ID,
+      `✅ *Bot conectado correctamente*\n\n📱 Número activo: *+${numero}*`,
+      getConfigKb()
+    )
   } catch (e: any) {
     console.error('❌ Error notificando conexión a Telegram:', e.message)
   }
