@@ -605,7 +605,24 @@ async function enviarRecordatorio(user: { id: number; usuario: string; celular: 
     }
 
     // Enviar recordatorio
-    const fechaExp = (fechaPanel ?? user.expiresAt) ? fechaCorta(new Date((fechaPanel ?? user.expiresAt)!)) : '-'
+    const fechaFinal = fechaPanel ?? user.expiresAt
+    const fechaExp = fechaFinal ? fechaCorta(new Date(fechaFinal)) : '-'
+    const msRestantes = fechaFinal ? new Date(fechaFinal).getTime() - Date.now() : 0
+    const horasRestantes = msRestantes / 3600000
+
+    let tiempoTexto: string
+    if (horasRestantes <= 0) {
+      tiempoTexto = '⚠️ *TU CUENTA YA VENCIÓ*'
+    } else if (horasRestantes < 1) {
+      const mins = Math.round(horasRestantes * 60)
+      tiempoTexto = `⏰ *TU CUENTA VENCE EN ${mins} MINUTO${mins !== 1 ? 'S' : ''}*`
+    } else if (horasRestantes < 24) {
+      const horas = Math.round(horasRestantes)
+      tiempoTexto = `⏰ *TU CUENTA VENCE EN ${horas} HORA${horas !== 1 ? 'S' : ''}*`
+    } else {
+      tiempoTexto = `⏰ *TU CUENTA VENCE EN 24 HORAS*`
+    }
+
     const jid = celularAJid(user.celular)
     const dbUser = await prisma.user.findUnique({ where: { id: user.id } })
     const precioRenovacion = dbUser?.plan ? buscarPrecioDesdeNombrePlan(dbUser.plan) : null
@@ -615,7 +632,7 @@ async function enviarRecordatorio(user: { id: number; usuario: string; celular: 
       : ''
 
     const textoRecordatorio =
-      `⏰ *TU CUENTA VENCE EN 24 HORAS*\n\n` +
+      `${tiempoTexto}\n\n` +
       `┌───────────────\n` +
       `👤 Usuario: *${user.usuario}*\n` +
       `🔐 Contraseña: *${dbUser?.password || '-'}*\n` +
