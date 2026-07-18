@@ -2036,12 +2036,16 @@ async function handleRenewalWithQuickOption(sock: WASocket, from: string, phoneN
 
     await sendMsg(sock, from, {
       text:
-        `🔄 *${cuentaData.usuario}*\n` +
-        `${planActual.duracion}${planActual.bonus ? ' ' + planActual.bonus : ''} • ${planActual.dispositivos} Dispositivo${planActual.dispositivos > 1 ? 's' : ''}\n\n` +
-        `¿Renovamos el mismo plan por Bs. ${planActual.precio}?\n\n` +
-        `1️⃣ Sí\n` +
-        `2️⃣ Ver otros planes\n` +
-        `0️⃣ No, volver al menú`
+        `🔄 *Renovación de Suscripción*\n\n` +
+        `👤 *Usuario:* ${cuentaData.usuario}\n` +
+        `📺 *Plan actual:*\n` +
+        `• ${planActual.duracion}${planActual.bonus ? ' ' + planActual.bonus : ''}\n` +
+        `• ${planActual.dispositivos} Dispositivo${planActual.dispositivos > 1 ? 's' : ''}\n\n` +
+        `💳 *Costo de renovación:* *Bs. ${planActual.precio}*\n\n` +
+        `¿Deseas renovar este mismo plan?\n\n` +
+        `1️⃣ ✅ Sí, renovar por Bs. ${planActual.precio}\n` +
+        `2️⃣ 📋 Ver otros planes\n` +
+        `0️⃣ Volver al menú principal`
     })
     userStates.set(phoneNumber, `quick_renewal_${existingUser.usuario}_${precioActual}_${noActivadaAun ? '0' : '1'}`)
   } catch (error: any) {
