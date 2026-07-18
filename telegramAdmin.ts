@@ -324,6 +324,10 @@ async function handleDemosClientes(chatId: number, msgId: number, offset: number
   if (offset + 8 < total) navRow.push({ text: 'Siguiente ➡️', cb: `demos_clientes_${offset + 8}` })
   const rows: KbRow[] = []
   if (navRow.length) rows.push(navRow)
+  // Botón liberar individual por cliente
+  pagina.forEach((c: any) => {
+    rows.push([{ text: `🔓 Liberar ${c.celular}`, cb: `dl_${c.celular}` }])
+  })
   rows.push([{ text: '🔓 Liberar todos', cb: 'demos_liberar_confirm' }, { text: '⬅️ Demos', cb: 'demos_menu' }])
   await edit(chatId, msgId,
     `👥 *Clientes demo (${offset + 1}–${Math.min(offset + 8, total)} de ${total})*\n\n${texto}`,
@@ -885,8 +889,20 @@ async function handleCallback(cbId: string, chatId: number, msgId: number, data:
   }
   if (data === 'demos_liberar_ok') {
     const { count } = await (prisma as any).demoHistory.deleteMany()
-    await edit(chatId, msgId, `✅ *${count} historiales demo eliminados.*\n\nTodos los clientes pueden pedir demos desde cero.`,
+    const { count: usersDemo } = await prisma.user.deleteMany({ where: { plan: 'DEMO 3 HORA' } })
+    await edit(chatId, msgId,
+      `✅ *${count} historiales demo eliminados.*\n🗑️ *${usersDemo} cuenta(s) demo borradas.*\n\nTodos los clientes pueden pedir demos desde cero.`,
       kb([[{ text: '⬅️ Demos', cb: 'demos_menu' }]])
+    ); return
+  }
+
+  if (data.startsWith('dl_')) {
+    const celular = data.slice(3)
+    await (prisma as any).demoHistory.deleteMany({ where: { celular } })
+    await prisma.user.deleteMany({ where: { celular, plan: 'DEMO 3 HORA' } })
+    await edit(chatId, msgId,
+      `✅ *Demo liberada*\n\n📱 \`${celular}\` puede pedir una nueva demo.`,
+      kb([[{ text: '⬅️ Clientes demo', cb: 'demos_clientes_0' }]])
     ); return
   }
   if (data === 'espera') { await handleEspera(chatId, msgId); return }
