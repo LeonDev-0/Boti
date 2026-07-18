@@ -878,6 +878,8 @@ export async function registrarTransaccionDesdePanel(
 // =============================================
 // PROCESAR CUENTA NUEVA
 // =============================================
+const MAX_CUENTAS_POR_CLIENTE = 3
+
 async function procesarCuentaNueva(
   jid: string,
   phoneNumber: string,
@@ -887,6 +889,23 @@ async function procesarCuentaNueva(
 ): Promise<void> {
   const plan = PLANES_MAP[precio]
   iniciarProcesoCritico(jid)
+
+  // Bloqueo duro: verificar límite antes de crear la cuenta
+  const totalCuentas = await prisma.user.count({
+    where: { celular: phoneNumber, plan: { not: 'DEMO 3 HORA' } },
+  })
+  if (totalCuentas >= MAX_CUENTAS_POR_CLIENTE) {
+    finalizarProcesoCritico(jid)
+    await enviarConReintento(jid,
+      `⚠️ *LÍMITE DE CUENTAS ALCANZADO*\n\n` +
+      `Ya tenés *${totalCuentas} cuenta${totalCuentas > 1 ? 's' : ''}* registradas a tu nombre.\n` +
+      `El máximo permitido es de *${MAX_CUENTAS_POR_CLIENTE} cuentas* por cliente.\n\n` +
+      `Si querés más cuentas, consultá sobre nuestro plan de revendedor.\n\n` +
+      `5️⃣ Ver mis cuentas\n` +
+      `0️⃣ Volver al menú`
+    )
+    return
+  }
   try {
     let planPuppeteer = ''
     let meses = 0
@@ -1732,6 +1751,22 @@ async function _handleMessage(sock: WASocket, msg: any): Promise<void> {
         const incluirAdultos = lc === '1' || lc === 'si' || lc === 'sí'
         adultosPreferencia.set(phoneNumber, incluirAdultos)
         const plan = PLANES_MAP[pending.precio]
+        const cuentasActuales = await prisma.user.count({
+          where: { celular: phoneNumber, plan: { not: 'DEMO 3 HORA' } },
+        })
+        if (cuentasActuales >= MAX_CUENTAS_POR_CLIENTE) {
+          const lista = (existingOfficialUsers ?? []).map(u => `• *${u.usuario}* — vence ${u.expiresAt ? fechaCorta(new Date(u.expiresAt)) : '-'}`).join('\n')
+          await sendMsg(sock, from, {
+            text:
+              `⚠️ *LÍMITE DE CUENTAS ALCANZADO*\n\n` +
+              `Ya tenés *${cuentasActuales} cuenta${cuentasActuales > 1 ? 's' : ''}* registradas. El máximo es *${MAX_CUENTAS_POR_CLIENTE}*.\n\n` +
+              (lista ? `📋 *Tus cuentas:*\n${lista}\n\n` : '') +
+              `Si necesitás más cuentas, consultá sobre nuestro plan de revendedor.\n\n` +
+              `5️⃣ Ver mis cuentas\n` +
+              `0️⃣ Volver al menú`
+          })
+          return
+        }
         await enviarQRPago(sock, from, phoneNumber, plan.precio, 'nueva', pending.precio, pending.nombre, undefined, existingUser?.id)
         return
       }
