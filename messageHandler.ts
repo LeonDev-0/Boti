@@ -1556,7 +1556,7 @@ async function _handleMessage(sock: WASocket, msg: any): Promise<void> {
         const msHastaVenc = existingUser?.expiresAt
           ? new Date(existingUser.expiresAt).getTime() - Date.now()
           : Infinity
-        const canChangePlan = cuentaActivada && msHastaVenc <= 25 * 3600_000
+        const canChangePlan = cuentaActivada && msHastaVenc <= 72 * 3600_000
         const imgDisp: number | 'all' = canChangePlan ? 'all' : dispositivos
         await sendPlanesImagen(sock, from, imgDisp, `Escribe el precio del plan que deseas 👇`)
         userStates.set(phoneNumber, `selecting_renewal_plan_${canChangePlan ? 0 : dispositivos}_${usuarioIPTV}`)
