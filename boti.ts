@@ -169,8 +169,17 @@ async function startBot(): Promise<void> {
         console.log(`🔄 Reconectando en ${Math.round(delay / 1000)}s (intento ${reconnectAttempts})`)
         setTimeout(() => startBot(), delay)
       } else {
+        // Sesión inválida — limpiar auth para que el próximo intento muestre QR
         setWAStatus('desconectado')
-        console.log('❌ Sesión cerrada. Usa Telegram para vincular un número nuevo.')
+        console.log('❌ Sesión cerrada. Limpiando auth para permitir nueva vinculación...')
+        try {
+          if (fs.existsSync('./auth')) {
+            for (const file of fs.readdirSync('./auth')) {
+              try { fs.rmSync(`./auth/${file}`, { recursive: true, force: true }) } catch {}
+            }
+          }
+        } catch {}
+        await notifyWAEsperando().catch(() => {})
       }
     }
 
