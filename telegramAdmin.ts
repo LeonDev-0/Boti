@@ -324,10 +324,6 @@ async function handleDemosClientes(chatId: number, msgId: number, offset: number
   if (offset + 8 < total) navRow.push({ text: 'Siguiente ➡️', cb: `demos_clientes_${offset + 8}` })
   const rows: KbRow[] = []
   if (navRow.length) rows.push(navRow)
-  // Botón liberar individual por cliente
-  pagina.forEach((c: any) => {
-    rows.push([{ text: `🔓 Liberar ${c.celular}`, cb: `dl_${c.celular}` }])
-  })
   rows.push([{ text: '🔓 Liberar todos', cb: 'demos_liberar_confirm' }, { text: '⬅️ Demos', cb: 'demos_menu' }])
   await edit(chatId, msgId,
     `👥 *Clientes demo (${offset + 1}–${Math.min(offset + 8, total)} de ${total})*\n\n${texto}`,
